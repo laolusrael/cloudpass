@@ -112,18 +112,26 @@ go test ./...
 - **Linter**: ESLint must pass
 - **Formatter**: Prettier must pass
 - **Types**: TypeScript strict mode, no `any`
-- **Tests**: Vitest for unit tests
+- **Tests**: Vitest + @testing-library/svelte for unit tests
 
 **Commands:**
 ```bash
 npm run lint
 npm run format
 npm run test
+npm run build
 ```
 
 ---
 
 ## 4. Testing Requirements
+
+### Frameworks
+
+| Language | Framework | Purpose |
+|----------|-----------|---------|
+| Go | `testify` + `assert` | Unit tests, assertions |
+| Svelte | `vitest` + `@testing-library/svelte` | Unit + component tests |
 
 ### Mandatory Before PR
 

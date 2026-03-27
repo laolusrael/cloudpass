@@ -1,0 +1,15 @@
+server:
+  host: "0.0.0.0"
+  port: 8080
+
+security:
+  allowed_ips: []
+  websocket_idle_timeout_minutes: 30
+
+multipass:
+  socket_path: "/var/run/multipass_socket"
+  default_timeout_seconds: 300
+
+logging:
+  level: "info"
+  format: "json"
