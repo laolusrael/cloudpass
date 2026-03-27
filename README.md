@@ -49,6 +49,45 @@ docker-compose up -d
 # UI: http://localhost:3000
 ```
 
+## Deployment
+
+### Option 1: Docker Compose (Recommended)
+
+Follow the Docker Compose instructions in the Quick Start section above.
+
+### Option 2: Direct Server Deployment (Without Docker)
+
+For deploying on a server without Docker:
+
+1. **Build the API**
+```bash
+cd api
+go build -o cloudpass ./cmd/server
+```
+
+2. **Build the Frontend**
+```bash
+cd ui
+npm install
+npm run build
+```
+
+3. **Set up Nginx as Reverse Proxy**
+- Install nginx
+- Configure nginx to serve static files from ui/build and proxy API requests to the Go server
+- Example nginx config provided
+
+4. **Create Systemd Service**
+- Create a systemd service file for the API server
+- Enable and start the service
+
+5. **Security Configuration**
+- Set allowed IPs in config.yaml for IP whitelist
+- Use firewall rules
+
+6. **Access the Application**
+- Access via nginx (e.g., http://your-server)
+
 ### Manual Setup
 
 #### Backend
