@@ -1,6 +1,9 @@
 <script lang="ts">
-	import type { CreateInstanceRequest } from '$lib/types';
+	import { onMount } from 'svelte';
+	import type { CreateInstanceRequest, Image } from '$lib/types';
+	import { images } from '$lib/stores/images';
 	import Input from './Input.svelte';
+	import Select from './Select.svelte';
 	import Button from './Button.svelte';
 
 	interface Props {
@@ -17,6 +20,17 @@
 	let memory = $state('1G');
 	let disk = $state('5G');
 
+	const imageOptions = $derived(
+		$images.map((img: Image) => ({
+			value: img.alias || img.release,
+			label: img.release ? `${img.release} (${img.alias || img.version})` : img.alias
+		}))
+	);
+
+	onMount(() => {
+		images.refresh();
+	});
+
 	function handleSubmit(e: Event) {
 		e.preventDefault();
 		onSubmit({
@@ -32,7 +46,13 @@
 <form onsubmit={handleSubmit} class="space-y-4">
 	<Input label="Instance Name" placeholder="my-vm" bind:value={name} required />
 
-	<Input label="Image" placeholder="22.04 (default: Ubuntu LTS)" bind:value={image} />
+	<Select
+		label="Image"
+		options={imageOptions}
+		bind:value={image}
+		placeholder="Select an image (default: Ubuntu LTS)"
+		searchable={true}
+	/>
 
 	<div class="grid grid-cols-3 gap-4">
 		<Input label="CPUs" type="number" placeholder="1" bind:value={cpus} />
@@ -43,7 +63,9 @@
 	</div>
 
 	<div class="flex justify-end gap-3 pt-4">
-		<Button variant="secondary" type="button" onclick={onCancel}>Cancel</Button>
+		<Button variant="secondary" type="button" onclick={onCancel}>
+			Cancel
+		</Button>
 		<Button variant="primary" type="submit" disabled={loading}>
 			{loading ? 'Creating...' : 'Create Instance'}
 		</Button>
