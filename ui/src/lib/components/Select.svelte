@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onMount } from 'svelte';
+
 	interface Option {
 		value: string;
 		label: string;
@@ -30,8 +32,12 @@
 
 	let isOpen = $state(false);
 	let searchTerm = $state('');
-	let inputId = `select-${Math.random().toString(36).slice(2, 9)}`;
-	let listId = `list-${Math.random().toString(36).slice(2, 9)}`;
+	let selectEl: HTMLDivElement;
+	let id = $state('');
+
+	onMount(() => {
+		id = `select-${Math.random().toString(36).slice(2, 9)}`;
+	});
 
 	const filteredOptions = $derived(
 		searchable && searchTerm
@@ -63,28 +69,29 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
+		if (!isOpen) return;
+
 		if (e.key === 'Escape') {
 			isOpen = false;
 			searchTerm = '';
-		} else if (e.key === 'Enter' && isOpen && filteredOptions.length > 0) {
+		} else if (e.key === 'Enter' && filteredOptions.length > 0) {
 			handleSelect(filteredOptions[0]);
 		}
 	}
 
 	function handleClickOutside(e: MouseEvent) {
-		const target = e.target as HTMLElement;
-		if (!target.closest(`#${inputId}`)) {
+		if (selectEl && !selectEl.contains(e.target as Node)) {
 			isOpen = false;
 			searchTerm = '';
 		}
 	}
 </script>
 
-<svelte:window onclick={handleClickOutside} onkeydown={handleKeydown} />
+<svelte:window onclick={handleClickOutside} />
 
 <div class="w-full">
 	{#if label}
-		<label for={inputId} class="block text-sm font-medium text-gray-700 mb-1">
+		<label for={id} class="block text-sm font-medium text-gray-700 mb-1">
 			{label}
 			{#if required}
 				<span class="text-red-500">*</span>
@@ -92,11 +99,12 @@
 		</label>
 	{/if}
 
-	<div class="relative" id={inputId}>
+	<div class="relative" bind:this={selectEl} id={id}>
 		<button
 			type="button"
 			onclick={toggleDropdown}
 			{disabled}
+			onkeydown={handleKeydown}
 			class="w-full px-3 py-2 text-left border rounded bg-white flex items-center justify-between
 				focus:outline-none focus:ring-2 focus:ring-gray-500 focus:border-transparent
 				disabled:bg-gray-100 disabled:cursor-not-allowed
@@ -131,7 +139,7 @@
 					</div>
 				{/if}
 
-				<ul class="overflow-y-auto max-h-40" role="listbox" id={listId}>
+				<ul class="overflow-y-auto max-h-40">
 					{#if filteredOptions.length === 0}
 						<li class="px-3 py-2 text-sm text-gray-500">No options found</li>
 					{:else}
@@ -140,10 +148,9 @@
 								<button
 									type="button"
 									onclick={() => handleSelect(option)}
+									onkeydown={handleKeydown}
 									class="w-full px-3 py-2 text-left text-sm hover:bg-gray-100
 										{option.value === value ? 'bg-gray-100 font-medium' : ''}"
-									role="option"
-									aria-selected={option.value === value}
 								>
 									{option.label}
 								</button>
