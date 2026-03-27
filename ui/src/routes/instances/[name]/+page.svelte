@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
+	import { onMount, onDestroy } from 'svelte';
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { api } from '$lib/services/api';
 	import type { Instance } from '$lib/types';
 	import Card from '$lib/components/Card.svelte';
@@ -11,6 +12,7 @@
 	let instance = $state<Instance | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+	let refreshInterval: ReturnType<typeof setInterval>;
 
 	const name = $derived($page.params.name);
 
@@ -28,6 +30,13 @@
 
 	onMount(() => {
 		loadInstance();
+		refreshInterval = setInterval(loadInstance, 10000);
+	});
+
+	onDestroy(() => {
+		if (refreshInterval) {
+			clearInterval(refreshInterval);
+		}
 	});
 
 	async function handleStart() {
@@ -65,7 +74,7 @@
 		if (confirm(`Delete instance "${instance.name}"?`)) {
 			try {
 				await api.deleteInstance(instance.name);
-				window.location.href = '/';
+				goto('/');
 			} catch (e) {
 				error = e instanceof Error ? e.message : 'Failed to delete';
 			}
