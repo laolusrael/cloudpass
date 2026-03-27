@@ -19,14 +19,15 @@
 </script>
 
 <Card>
-	<div class="flex items-start justify-between">
-		<div class="flex-1 min-w-0">
-			<div class="flex items-center gap-3">
-				<h3 class="text-lg font-medium text-gray-900 truncate">
-					{instance.name}
-				</h3>
-				<Badge state={instance.state} />
-			</div>
+	<a href="/instances/{instance.name}" class="block">
+		<div class="flex items-start justify-between">
+			<div class="flex-1 min-w-0">
+				<div class="flex items-center gap-3">
+					<h3 class="text-lg font-medium text-gray-900 truncate hover:text-gray-600">
+						{instance.name}
+					</h3>
+					<Badge state={instance.state} />
+				</div>
 
 			<div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
 				<div>
@@ -66,4 +67,5 @@
 			<Button variant="danger" size="sm" onclick={ondelete}>Delete</Button>
 		</div>
 	</div>
+	</a>
 </Card>

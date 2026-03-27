@@ -1,6 +1,8 @@
 <script lang="ts">
 	import '../app.css';
 	import type { Snippet } from 'svelte';
+	import { notifications } from '$lib/stores/notifications';
+	import Toast from '$lib/components/Toast.svelte';
 
 	interface Props {
 		children: Snippet;
@@ -29,4 +31,12 @@
 	<main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 		{@render children()}
 	</main>
+
+	{#each $notifications as notification (notification.id)}
+		<Toast
+			message={notification.message}
+			type={notification.type}
+			onclose={() => notifications.remove(notification.id)}
+		/>
+	{/each}
 </div>
