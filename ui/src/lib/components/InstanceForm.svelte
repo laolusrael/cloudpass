@@ -28,7 +28,7 @@
 	);
 
 	onMount(() => {
-		images.refresh();
+		images.load();
 	});
 
 	function handleSubmit(e: Event) {

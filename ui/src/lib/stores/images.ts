@@ -6,23 +6,38 @@ function createImagesStore() {
 	const { subscribe, set } = writable<Image[]>([]);
 	const loading = writable(false);
 	const error = writable<string | null>(null);
+	let cached = false;
 
 	return {
 		subscribe,
 		loading: { subscribe: loading.subscribe },
 		error: { subscribe: error.subscribe },
 
-		async refresh() {
+		async load(forceRefresh = false) {
+			if (cached && !forceRefresh) {
+				return;
+			}
+
 			loading.set(true);
 			error.set(null);
+
 			try {
 				const data = await api.getImages();
 				set(data.images);
+				cached = true;
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to load images');
 			} finally {
 				loading.set(false);
 			}
+		},
+
+		async refresh() {
+			await this.load(true);
+		},
+
+		get cached() {
+			return cached;
 		}
 	};
 }
