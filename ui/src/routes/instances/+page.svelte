@@ -1,14 +1,25 @@
 <script lang="ts">
+	import { onMount, onDestroy } from 'svelte';
 	import { instances } from '$lib/stores/instances';
+	import { notifications } from '$lib/stores/notifications';
 	import InstanceCard from '$lib/components/InstanceCard.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
-	import { onMount } from 'svelte';
 
 	let loading = $state(true);
+	let refreshInterval: ReturnType<typeof setInterval>;
 
 	onMount(() => {
 		instances.refresh();
+		refreshInterval = setInterval(() => {
+			instances.refresh();
+		}, 10000);
+	});
+
+	onDestroy(() => {
+		if (refreshInterval) {
+			clearInterval(refreshInterval);
+		}
 	});
 
 	instances.loading.subscribe((l) => (loading = l));
@@ -16,24 +27,27 @@
 	async function handleStart(name: string) {
 		try {
 			await instances.start(name);
+			notifications.success(`Instance "${name}" started`);
 		} catch (e) {
-			console.error('Failed to start:', e);
+			notifications.error(e instanceof Error ? e.message : 'Failed to start');
 		}
 	}
 
 	async function handleStop(name: string) {
 		try {
 			await instances.stop(name);
+			notifications.success(`Instance "${name}" stopped`);
 		} catch (e) {
-			console.error('Failed to stop:', e);
+			notifications.error(e instanceof Error ? e.message : 'Failed to stop');
 		}
 	}
 
 	async function handleRestart(name: string) {
 		try {
 			await instances.restart(name);
+			notifications.success(`Instance "${name}" restarted`);
 		} catch (e) {
-			console.error('Failed to restart:', e);
+			notifications.error(e instanceof Error ? e.message : 'Failed to restart');
 		}
 	}
 
@@ -41,8 +55,9 @@
 		if (confirm(`Are you sure you want to delete "${name}"?`)) {
 			try {
 				await instances.delete(name);
+				notifications.success(`Instance "${name}" deleted`);
 			} catch (e) {
-				console.error('Failed to delete:', e);
+				notifications.error(e instanceof Error ? e.message : 'Failed to delete');
 			}
 		}
 	}
