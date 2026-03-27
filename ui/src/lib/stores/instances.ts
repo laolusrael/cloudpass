@@ -30,7 +30,7 @@ function createInstancesStore() {
 			error.set(null);
 			try {
 				const instance = await api.createInstance(request);
-				update(instances => [...instances, instance]);
+				update((instances) => [...instances, instance]);
 				return instance;
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to create instance');
@@ -45,7 +45,7 @@ function createInstancesStore() {
 			error.set(null);
 			try {
 				await api.deleteInstance(name);
-				update(instances => instances.filter(i => i.name !== name));
+				update((instances) => instances.filter((i) => i.name !== name));
 			} catch (e) {
 				error.set(e instanceof Error ? e.message : 'Failed to delete instance');
 				throw e;
@@ -73,10 +73,10 @@ function createInstancesStore() {
 
 export const instances = createInstancesStore();
 
-export const runningInstances = derived(instances, $instances =>
-	$instances.filter(i => i.state === 'Running')
+export const runningInstances = derived(instances, ($instances) =>
+	$instances.filter((i) => i.state === 'Running')
 );
 
-export const stoppedInstances = derived(instances, $instances =>
-	$instances.filter(i => i.state === 'Stopped')
+export const stoppedInstances = derived(instances, ($instances) =>
+	$instances.filter((i) => i.state === 'Stopped')
 );

@@ -18,8 +18,8 @@ export default {
 				}
 			},
 			spacing: {
-				'4.5': '18px',
-				'18': '72px'
+				4.5: '18px',
+				18: '72px'
 			}
 		}
 	},

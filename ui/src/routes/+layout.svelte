@@ -17,9 +17,7 @@
 					<h1 class="text-xl font-semibold text-gray-900">CloudPass</h1>
 				</div>
 				<nav class="flex gap-6">
-					<a href="/" class="text-sm font-medium text-gray-700 hover:text-gray-900">
-						Dashboard
-					</a>
+					<a href="/" class="text-sm font-medium text-gray-700 hover:text-gray-900"> Dashboard </a>
 					<a href="/instances" class="text-sm font-medium text-gray-700 hover:text-gray-900">
 						Instances
 					</a>

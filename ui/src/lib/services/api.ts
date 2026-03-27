@@ -11,10 +11,7 @@ import type {
 const API_BASE = '/api';
 
 class ApiService {
-	private async request<T>(
-		endpoint: string,
-		options: RequestInit = {}
-	): Promise<T> {
+	private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
 		const response = await fetch(`${API_BASE}${endpoint}`, {
 			...options,
 			headers: {

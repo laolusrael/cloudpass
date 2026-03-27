@@ -11,7 +11,7 @@
 		instances.refresh();
 	});
 
-	instances.loading.subscribe(l => loading = l);
+	instances.loading.subscribe((l) => (loading = l));
 
 	async function handleStart(name: string) {
 		try {
@@ -59,10 +59,8 @@
 			<p class="mt-1 text-sm text-gray-500">Manage all virtual machines</p>
 		</div>
 		<div class="flex gap-3">
-			<Button variant="secondary" onclick={() => instances.refresh()}>
-				Refresh
-			</Button>
-			<Button variant="primary" onclick={() => window.location.href = '/instances/new'}>
+			<Button variant="secondary" onclick={() => instances.refresh()}>Refresh</Button>
+			<Button variant="primary" onclick={() => (window.location.href = '/instances/new')}>
 				New Instance
 			</Button>
 		</div>
@@ -76,7 +74,7 @@
 		<div class="text-center py-12 bg-white rounded border border-gray-200">
 			<p class="text-gray-500">No instances found</p>
 			<div class="mt-4">
-				<Button variant="primary" onclick={() => window.location.href = '/instances/new'}>
+				<Button variant="primary" onclick={() => (window.location.href = '/instances/new')}>
 					Create First Instance
 				</Button>
 			</div>

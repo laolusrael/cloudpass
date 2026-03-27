@@ -43,10 +43,6 @@
 	{/if}
 
 	<Card>
-		<InstanceForm
-			onSubmit={handleSubmit}
-			onCancel={handleCancel}
-			{loading}
-		/>
+		<InstanceForm onSubmit={handleSubmit} onCancel={handleCancel} {loading} />
 	</Card>
 </div>

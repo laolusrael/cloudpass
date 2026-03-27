@@ -76,11 +76,11 @@ export interface ErrorResponse {
 	message: string;
 }
 
-export type InstanceState = 
-	| 'Starting' 
-	| 'Running' 
-	| 'Stopping' 
-	| 'Stopped' 
-	| 'Suspended' 
-	| 'Deleting' 
+export type InstanceState =
+	| 'Starting'
+	| 'Running'
+	| 'Stopping'
+	| 'Stopped'
+	| 'Suspended'
+	| 'Deleting'
 	| 'Deleted';

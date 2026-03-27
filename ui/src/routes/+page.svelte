@@ -12,9 +12,9 @@
 		instances.refresh();
 	});
 
-	instances.loading.subscribe(l => loading = l);
-	instances.error.subscribe(e => error = e);
-	instances.subscribe(i => loading = false);
+	instances.loading.subscribe((l) => (loading = l));
+	instances.error.subscribe((e) => (error = e));
+	instances.subscribe(() => (loading = false));
 
 	async function handleStart(name: string) {
 		try {
@@ -61,7 +61,7 @@
 			<h2 class="text-2xl font-bold text-gray-900">Instances</h2>
 			<p class="mt-1 text-sm text-gray-500">Manage your Multipass virtual machines</p>
 		</div>
-		<Button variant="primary" onclick={() => window.location.href = '/instances/new'}>
+		<Button variant="primary" onclick={() => (window.location.href = '/instances/new')}>
 			New Instance
 		</Button>
 	</div>

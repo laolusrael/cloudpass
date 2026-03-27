@@ -19,7 +19,8 @@
 		children
 	}: Props = $props();
 
-	const baseClasses = 'font-medium rounded transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
+	const baseClasses =
+		'font-medium rounded transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2';
 
 	const variantClasses = {
 		primary: 'bg-gray-700 text-white hover:bg-gray-600 focus:ring-gray-500',
@@ -39,8 +40,10 @@
 <button
 	{type}
 	{disabled}
-	onclick={onclick}
-	class="{baseClasses} {variantClasses[variant]} {sizeClasses[size]} {disabled ? disabledClasses : ''}"
+	{onclick}
+	class="{baseClasses} {variantClasses[variant]} {sizeClasses[size]} {disabled
+		? disabledClasses
+		: ''}"
 >
 	{@render children()}
 </button>

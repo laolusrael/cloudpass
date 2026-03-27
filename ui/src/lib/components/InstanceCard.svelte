@@ -9,7 +9,7 @@
 		onstart?: () => void;
 		onstop?: () => void;
 		onrestart?: () => void;
-	ondelete?: () => void;
+		ondelete?: () => void;
 	}
 
 	let { instance, onstart, onstop, onrestart, ondelete }: Props = $props();
@@ -27,7 +27,7 @@
 				</h3>
 				<Badge state={instance.state} />
 			</div>
-			
+
 			<div class="mt-2 grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
 				<div>
 					<span class="text-gray-500">IP:</span>
@@ -58,20 +58,12 @@
 
 		<div class="flex flex-col gap-2 ml-4">
 			{#if isRunning}
-				<Button variant="secondary" size="sm" onclick={onstop}>
-					Stop
-				</Button>
-				<Button variant="secondary" size="sm" onclick={onrestart}>
-					Restart
-				</Button>
+				<Button variant="secondary" size="sm" onclick={onstop}>Stop</Button>
+				<Button variant="secondary" size="sm" onclick={onrestart}>Restart</Button>
 			{:else if isStopped}
-				<Button variant="primary" size="sm" onclick={onstart}>
-					Start
-				</Button>
+				<Button variant="primary" size="sm" onclick={onstart}>Start</Button>
 			{/if}
-			<Button variant="danger" size="sm" onclick={ondelete}>
-				Delete
-			</Button>
+			<Button variant="danger" size="sm" onclick={ondelete}>Delete</Button>
 		</div>
 	</div>
 </Card>
