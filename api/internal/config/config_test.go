@@ -69,7 +69,7 @@ func TestLoad_EmptyConfig(t *testing.T) {
 	assert.Equal(t, 8080, cfg.Server.Port)
 	assert.Empty(t, cfg.Security.AllowedIPs)
 	assert.Equal(t, 30, cfg.Security.WebsocketTimeoutMin)
-	assert.Equal(t, "/var/run/multipass_socket", cfg.Multipass.SocketPath)
+	assert.Equal(t, DetectSocketPath(), cfg.Multipass.SocketPath)
 	assert.Equal(t, 300, cfg.Multipass.DefaultTimeoutSec)
 	assert.Equal(t, "info", cfg.Logging.Level)
 	assert.Equal(t, "json", cfg.Logging.Format)

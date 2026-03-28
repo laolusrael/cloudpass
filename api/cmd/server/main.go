@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"net/http"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"cloudpass/internal/handlers"
 	"cloudpass/internal/middleware"
 	"cloudpass/internal/multipass"
+	"cloudpass/internal/web"
 	"cloudpass/internal/websocket"
 
 	"github.com/labstack/echo/v4"
@@ -21,21 +23,44 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	version     = "0.1.0"
+	commit      = "dev"
+	date        = "now"
+	configPath  string
+	resetConfig bool
+	showVersion bool
+)
+
+func init() {
+	flag.StringVar(&configPath, "config", "", "path to config file (default: ./config.yaml)")
+	flag.BoolVar(&resetConfig, "reset-config", false, "reset config file to defaults")
+	flag.BoolVar(&showVersion, "version", false, "show version info")
+	flag.Parse()
+}
+
 func main() {
-	configPath := os.Getenv("CLOUDPASS_CONFIG")
+	if showVersion {
+		mpVersion := config.GetMultipassVersion()
+		fmt.Printf("cloudpass %s\n", version)
+		fmt.Printf("commit: %s\n", commit)
+		fmt.Printf("built: %s\n", date)
+		if mpVersion != "" {
+			fmt.Printf("multipass %s\n", mpVersion)
+		} else {
+			fmt.Println("multipass: not found")
+		}
+		return
+	}
+
 	if configPath == "" {
 		configPath = "./config.yaml"
 	}
 
-	cfg, err := config.Load(configPath)
+	cfg, err := config.EnsureConfig(configPath, resetConfig)
 	if err != nil {
-		log.Warn().Err(err).Msg("failed to load config, using defaults")
-		cfg = &config.Config{
-			Server: config.ServerConfig{
-				Host: "0.0.0.0",
-				Port: 8080,
-			},
-		}
+		fmt.Fprintf(os.Stderr, "failed to initialize config: %v\n", err)
+		os.Exit(1)
 	}
 
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
@@ -95,6 +120,8 @@ func main() {
 	api.GET("/networks", networkHandler.List)
 	api.POST("/networks", networkHandler.Create)
 	api.DELETE("/networks/:name", networkHandler.Delete)
+
+	e.GET("/*", web.StaticHandler())
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
