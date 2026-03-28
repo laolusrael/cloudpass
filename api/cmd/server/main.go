@@ -76,6 +76,7 @@ func main() {
 
 	api.GET("/instances", instanceHandler.List)
 	api.POST("/instances", instanceHandler.Create)
+	api.POST("/instances/import", instanceHandler.Import)
 	api.GET("/instances/:name", instanceHandler.Get)
 	api.DELETE("/instances/:name", instanceHandler.Delete)
 	api.POST("/instances/:name/start", instanceHandler.Start)
@@ -83,6 +84,11 @@ func main() {
 	api.POST("/instances/:name/restart", instanceHandler.Restart)
 	api.POST("/instances/:name/suspend", instanceHandler.Suspend)
 	api.POST("/instances/:name/resume", instanceHandler.Resume)
+	api.POST("/instances/:name/export", instanceHandler.Export)
+	api.POST("/instances/:name/snapshots", instanceHandler.CreateSnapshot)
+	api.GET("/instances/:name/snapshots", instanceHandler.ListSnapshots)
+	api.POST("/instances/:name/snapshots/:id/restore", instanceHandler.RestoreSnapshot)
+	api.DELETE("/instances/:name/snapshots/:id", instanceHandler.DeleteSnapshot)
 	api.GET("/instances/:name/terminal", terminalHandler.HandleTerminal)
 
 	api.GET("/images", imageHandler.List)

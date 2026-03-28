@@ -84,3 +84,46 @@ export type InstanceState =
 	| 'Suspended'
 	| 'Deleting'
 	| 'Deleted';
+
+export interface Snapshot {
+	name: string;
+	instance: string;
+	created_at?: string;
+	comment?: string;
+	parent?: string;
+	children?: number;
+	state_size?: number;
+	disk_size?: number;
+	memory_size?: number;
+}
+
+export interface SnapshotList {
+	snapshots: Snapshot[];
+}
+
+export interface CreateSnapshotRequest {
+	name?: string;
+	comment?: string;
+}
+
+export interface RestoreSnapshotRequest {
+	name?: string;
+}
+
+export interface ExportInstanceRequest {
+	output_path?: string;
+	format?: string;
+}
+
+export interface ImportInstanceRequest {
+	name?: string;
+	image_path: string;
+	cpus?: number;
+	memory?: string;
+	disk?: string;
+}
+
+export interface InstanceExport {
+	message: string;
+	image_path?: string;
+}

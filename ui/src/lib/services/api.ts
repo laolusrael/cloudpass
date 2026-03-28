@@ -5,7 +5,11 @@ import type {
 	InstanceResponse,
 	ImageList,
 	NetworkList,
-	ErrorResponse
+	ErrorResponse,
+	SnapshotList,
+	CreateSnapshotRequest,
+	InstanceExport,
+	ImportInstanceRequest
 } from '$lib/types';
 
 const API_BASE = '/api';
@@ -91,6 +95,49 @@ class ApiService {
 
 	async healthCheck(): Promise<{ status: string }> {
 		return this.request<{ status: string }>('/health');
+	}
+
+	async createSnapshot(instanceName: string, request: CreateSnapshotRequest): Promise<InstanceResponse> {
+		return this.request<InstanceResponse>(`/instances/${encodeURIComponent(instanceName)}/snapshots`, {
+			method: 'POST',
+			body: JSON.stringify(request)
+		});
+	}
+
+	async getSnapshots(instanceName: string): Promise<SnapshotList> {
+		return this.request<SnapshotList>(`/instances/${encodeURIComponent(instanceName)}/snapshots`);
+	}
+
+	async restoreSnapshot(instanceName: string, snapshotName: string): Promise<InstanceResponse> {
+		return this.request<InstanceResponse>(
+			`/instances/${encodeURIComponent(instanceName)}/snapshots/${encodeURIComponent(snapshotName)}/restore`,
+			{
+				method: 'POST'
+			}
+		);
+	}
+
+	async deleteSnapshot(instanceName: string, snapshotName: string): Promise<InstanceResponse> {
+		return this.request<InstanceResponse>(
+			`/instances/${encodeURIComponent(instanceName)}/snapshots/${encodeURIComponent(snapshotName)}`,
+			{
+				method: 'DELETE'
+			}
+		);
+	}
+
+	async exportInstance(instanceName: string, outputPath?: string): Promise<InstanceExport> {
+		return this.request<InstanceExport>(`/instances/${encodeURIComponent(instanceName)}/export`, {
+			method: 'POST',
+			body: JSON.stringify({ output_path: outputPath })
+		});
+	}
+
+	async importInstance(request: ImportInstanceRequest): Promise<Instance> {
+		return this.request<Instance>('/instances/import', {
+			method: 'POST',
+			body: JSON.stringify(request)
+		});
 	}
 }
 
