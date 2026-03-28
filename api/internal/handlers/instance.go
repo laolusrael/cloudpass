@@ -39,6 +39,7 @@ func validateInstanceName(name string) error {
 func (h *InstanceHandler) List(c echo.Context) error {
 	instances, err := h.client.ListInstances()
 	if err != nil {
+		logger.API.Error().Err(err).Msg("failed to list instances")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
@@ -53,6 +54,7 @@ func (h *InstanceHandler) List(c echo.Context) error {
 		instances[i] = *instance
 	}
 
+	logger.API.Debug().Int("count", len(instances)).Msg("listed instances")
 	return c.JSON(http.StatusOK, models.InstanceList{
 		Instances: instances,
 	})
@@ -61,6 +63,7 @@ func (h *InstanceHandler) List(c echo.Context) error {
 func (h *InstanceHandler) Get(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "instance name is required",
@@ -70,17 +73,20 @@ func (h *InstanceHandler) Get(c echo.Context) error {
 	instance, err := h.client.GetInstance(name)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",
 				Message: err.Error(),
 			})
 		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to get instance")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
 		})
 	}
 
+	logger.API.Debug().Str("name", name).Msg("got instance")
 	return c.JSON(http.StatusOK, instance)
 }
 
@@ -235,6 +241,7 @@ func (h *InstanceHandler) Stop(c echo.Context) error {
 func (h *InstanceHandler) Restart(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "instance name is required",
@@ -249,27 +256,23 @@ func (h *InstanceHandler) Restart(c echo.Context) error {
 		})
 	}
 
-	if err := validateInstanceName(name); err != nil {
-		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Message: err.Error(),
-		})
-	}
-
 	err := h.client.RestartInstance(name)
 	if err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",
 				Message: err.Error(),
 			})
 		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to restart instance")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
 		})
 	}
 
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Msg("instance restarted")
 	return c.JSON(http.StatusOK, models.InstanceResponse{
 		Message: "Instance restarted",
 	})
@@ -278,6 +281,7 @@ func (h *InstanceHandler) Restart(c echo.Context) error {
 func (h *InstanceHandler) Suspend(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "instance name is required",
@@ -285,6 +289,7 @@ func (h *InstanceHandler) Suspend(c echo.Context) error {
 	}
 
 	if err := validateInstanceName(name); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: err.Error(),
@@ -294,17 +299,20 @@ func (h *InstanceHandler) Suspend(c echo.Context) error {
 	err := h.client.SuspendInstance(name)
 	if err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",
 				Message: err.Error(),
 			})
 		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to suspend instance")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
 		})
 	}
 
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Msg("instance suspended")
 	return c.JSON(http.StatusOK, models.InstanceResponse{
 		Message: "Instance suspended",
 	})
@@ -313,6 +321,7 @@ func (h *InstanceHandler) Suspend(c echo.Context) error {
 func (h *InstanceHandler) Resume(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "instance name is required",
@@ -320,6 +329,7 @@ func (h *InstanceHandler) Resume(c echo.Context) error {
 	}
 
 	if err := validateInstanceName(name); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: err.Error(),
@@ -329,17 +339,20 @@ func (h *InstanceHandler) Resume(c echo.Context) error {
 	err := h.client.ResumeInstance(name)
 	if err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",
 				Message: err.Error(),
 			})
 		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to resume instance")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
 		})
 	}
 
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Msg("instance resumed")
 	return c.JSON(http.StatusOK, models.InstanceResponse{
 		Message: "Instance resumed",
 	})
@@ -348,6 +361,7 @@ func (h *InstanceHandler) Resume(c echo.Context) error {
 func (h *InstanceHandler) Export(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "instance name is required",
@@ -355,6 +369,7 @@ func (h *InstanceHandler) Export(c echo.Context) error {
 	}
 
 	if err := validateInstanceName(name); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: err.Error(),
@@ -363,23 +378,27 @@ func (h *InstanceHandler) Export(c echo.Context) error {
 
 	var req models.ExportInstanceRequest
 	if err := c.Bind(&req); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Msg("invalid request body")
 		req = models.ExportInstanceRequest{}
 	}
 
 	imagePath, err := h.client.ExportInstance(name, req.OutputPath)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",
 				Message: err.Error(),
 			})
 		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to export instance")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
 		})
 	}
 
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("path", imagePath).Msg("instance exported")
 	return c.JSON(http.StatusOK, models.InstanceExport{
 		Message:   "Instance exported successfully",
 		ImagePath: imagePath,
@@ -389,6 +408,7 @@ func (h *InstanceHandler) Export(c echo.Context) error {
 func (h *InstanceHandler) Import(c echo.Context) error {
 	var req models.ImportInstanceRequest
 	if err := c.Bind(&req); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Msg("invalid request body")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "invalid request body",
@@ -396,6 +416,7 @@ func (h *InstanceHandler) Import(c echo.Context) error {
 	}
 
 	if req.ImagePath == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("image_path is required")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "image_path is required",
@@ -404,6 +425,7 @@ func (h *InstanceHandler) Import(c echo.Context) error {
 
 	if req.Name != "" {
 		if err := validateInstanceName(req.Name); err != nil {
+			logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", req.Name).Msg("invalid instance name")
 			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 				Error:   "invalid_request",
 				Message: err.Error(),
@@ -413,18 +435,21 @@ func (h *InstanceHandler) Import(c echo.Context) error {
 
 	instance, err := h.client.ImportInstance(req.ImagePath, req.Name, req.CPUs, req.Memory, req.Disk)
 	if err != nil {
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("image", req.ImagePath).Msg("failed to import instance")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
 		})
 	}
 
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", instance.Name).Msg("instance imported")
 	return c.JSON(http.StatusCreated, instance)
 }
 
 func (h *InstanceHandler) CreateSnapshot(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "instance name is required",
@@ -432,6 +457,7 @@ func (h *InstanceHandler) CreateSnapshot(c echo.Context) error {
 	}
 
 	if err := validateInstanceName(name); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: err.Error(),
@@ -440,23 +466,27 @@ func (h *InstanceHandler) CreateSnapshot(c echo.Context) error {
 
 	var req models.CreateSnapshotRequest
 	if err := c.Bind(&req); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Msg("invalid request body")
 		req = models.CreateSnapshotRequest{}
 	}
 
 	err := h.client.CreateSnapshot(name, req.Name, req.Comment)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",
 				Message: err.Error(),
 			})
 		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to create snapshot")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
 		})
 	}
 
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("snapshot", req.Name).Msg("snapshot created")
 	return c.JSON(http.StatusCreated, models.InstanceResponse{
 		Message: "Snapshot created",
 	})
@@ -465,6 +495,7 @@ func (h *InstanceHandler) CreateSnapshot(c echo.Context) error {
 func (h *InstanceHandler) ListSnapshots(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "instance name is required",
@@ -472,6 +503,7 @@ func (h *InstanceHandler) ListSnapshots(c echo.Context) error {
 	}
 
 	if err := validateInstanceName(name); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: err.Error(),
@@ -481,17 +513,20 @@ func (h *InstanceHandler) ListSnapshots(c echo.Context) error {
 	snapshots, err := h.client.ListSnapshots(name)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",
 				Message: err.Error(),
 			})
 		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to list snapshots")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
 		})
 	}
 
+	logger.API.Debug().Int("count", len(snapshots)).Str("name", name).Msg("listed snapshots")
 	return c.JSON(http.StatusOK, models.SnapshotList{
 		Snapshots: snapshots,
 	})
@@ -502,6 +537,7 @@ func (h *InstanceHandler) RestoreSnapshot(c echo.Context) error {
 	snapshotID := c.Param("id")
 
 	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "instance name is required",
@@ -509,6 +545,7 @@ func (h *InstanceHandler) RestoreSnapshot(c echo.Context) error {
 	}
 
 	if err := validateInstanceName(name); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: err.Error(),
@@ -526,17 +563,20 @@ func (h *InstanceHandler) RestoreSnapshot(c echo.Context) error {
 	err := h.client.RestoreSnapshot(name, snapshotName)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance or snapshot not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",
 				Message: err.Error(),
 			})
 		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Str("snapshot", snapshotName).Msg("failed to restore snapshot")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
 		})
 	}
 
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("snapshot", snapshotName).Msg("snapshot restored")
 	return c.JSON(http.StatusOK, models.InstanceResponse{
 		Message: "Snapshot restored",
 	})
@@ -547,6 +587,7 @@ func (h *InstanceHandler) DeleteSnapshot(c echo.Context) error {
 	snapshotID := c.Param("id")
 
 	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "instance name is required",
@@ -554,6 +595,7 @@ func (h *InstanceHandler) DeleteSnapshot(c echo.Context) error {
 	}
 
 	if err := validateInstanceName(name); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: err.Error(),
@@ -563,17 +605,20 @@ func (h *InstanceHandler) DeleteSnapshot(c echo.Context) error {
 	err := h.client.DeleteSnapshot(name, snapshotID)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance or snapshot not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",
 				Message: err.Error(),
 			})
 		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Str("snapshot", snapshotID).Msg("failed to delete snapshot")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
 		})
 	}
 
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("snapshot", snapshotID).Msg("snapshot deleted")
 	return c.JSON(http.StatusOK, models.InstanceResponse{
 		Message: "Snapshot deleted",
 	})
