@@ -1,0 +1,35 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudpass-api
+  labels:
+    app: cloudpass
+    component: api
+spec:
+  type: ClusterIP
+  ports:
+    - port: 8080
+      targetPort: 8080
+      protocol: TCP
+      name: http
+  selector:
+    app: cloudpass
+    component: api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: cloudpass-ui
+  labels:
+    app: cloudpass
+    component: ui
+spec:
+  type: ClusterIP
+  ports:
+    - port: 3000
+      targetPort: 3000
+      protocol: TCP
+      name: http
+  selector:
+    app: cloudpass
+    component: ui

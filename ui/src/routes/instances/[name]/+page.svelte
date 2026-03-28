@@ -81,6 +81,28 @@
 		}
 	}
 
+	async function handleExport() {
+		if (!instance) return;
+		try {
+			const result = await api.exportInstance(instance.name);
+			alert(`Instance exported to: ${result.image_path}`);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to export';
+		}
+	}
+
+	async function handleImport() {
+		const imagePath = prompt('Enter image path to import:');
+		if (!imagePath) return;
+		const name = prompt('Enter instance name (optional):');
+		try {
+			await api.importInstance({ image_path: imagePath, name: name || undefined });
+			goto('/');
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to import';
+		}
+	}
+
 	const isRunning = $derived(instance?.state === 'Running');
 	const isStopped = $derived(instance?.state === 'Stopped');
 </script>
@@ -100,6 +122,9 @@
 		</div>
 		<div class="flex gap-2">
 			{#if instance}
+				<a href="/instances/{name}/snapshots">
+					<Button variant="secondary">Snapshots</Button>
+				</a>
 				{#if isRunning}
 					<a href="/instances/{name}/terminal">
 						<Button variant="secondary">Terminal</Button>
@@ -109,6 +134,8 @@
 				{:else if isStopped}
 					<Button variant="primary" onclick={handleStart}>Start</Button>
 				{/if}
+				<Button variant="secondary" onclick={handleExport}>Export</Button>
+				<Button variant="secondary" onclick={handleImport}>Import</Button>
 				<Button variant="danger" onclick={handleDelete}>Delete</Button>
 			{/if}
 		</div>

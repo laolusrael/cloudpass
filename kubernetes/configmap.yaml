@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: cloudpass-config
+  labels:
+    app: cloudpass
+data:
+  config.yaml: |
+    server:
+      host: 0.0.0.0
+      port: 8080
+    multipass:
+      default_timeout_sec: 300
+    logging:
+      level: info
+    security:
+      allowed_ips: []

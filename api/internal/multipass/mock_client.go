@@ -161,3 +161,42 @@ func (m *MockClient) SetDeleteNetworkErr(err error) {
 func (m *MockClient) SetListNetworksErr(err error) {
 	m.listNetworksErr = err
 }
+
+func (m *MockClient) PurgeDeleted() error {
+	return nil
+}
+
+func (m *MockClient) CreateSnapshot(instanceName string, snapshotName string, comment string) error {
+	return nil
+}
+
+func (m *MockClient) RestoreSnapshot(instanceName string, snapshotName string) error {
+	return nil
+}
+
+func (m *MockClient) ListSnapshots(instanceName string) ([]models.Snapshot, error) {
+	return []models.Snapshot{
+		{
+			Name:      "snap1",
+			Instance:  instanceName,
+			CreatedAt: "2024-01-01T00:00:00Z",
+		},
+	}, nil
+}
+
+func (m *MockClient) DeleteSnapshot(instanceName string, snapshotName string) error {
+	return nil
+}
+
+func (m *MockClient) ExportInstance(instanceName string, outputPath string) (string, error) {
+	if outputPath == "" {
+		outputPath = "./" + instanceName + ".img"
+	}
+	return outputPath, nil
+}
+
+func (m *MockClient) ImportInstance(imagePath string, name string, cpus int, memory string, disk string) (*models.Instance, error) {
+	inst := models.Instance{Name: name}
+	m.instances = append(m.instances, inst)
+	return &inst, nil
+}

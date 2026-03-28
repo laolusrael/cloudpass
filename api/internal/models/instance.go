@@ -90,3 +90,46 @@ type HealthResponse struct {
 	Status    string    `json:"status"`
 	Timestamp time.Time `json:"timestamp"`
 }
+
+type Snapshot struct {
+	Name       string `json:"name"`
+	Instance   string `json:"instance"`
+	CreatedAt  string `json:"created_at,omitempty"`
+	Comment    string `json:"comment,omitempty"`
+	Parent     string `json:"parent,omitempty"`
+	Children   int    `json:"children,omitempty"`
+	StateSize  int64  `json:"state_size,omitempty"`
+	DiskSize   int64  `json:"disk_size,omitempty"`
+	MemorySize int64  `json:"memory_size,omitempty"`
+}
+
+type SnapshotList struct {
+	Snapshots []Snapshot `json:"snapshots"`
+}
+
+type CreateSnapshotRequest struct {
+	Name    string `json:"name,omitempty"`
+	Comment string `json:"comment,omitempty"`
+}
+
+type RestoreSnapshotRequest struct {
+	Name string `json:"name,omitempty"`
+}
+
+type ExportInstanceRequest struct {
+	OutputPath string `json:"output_path,omitempty"`
+	Format     string `json:"format,omitempty"`
+}
+
+type ImportInstanceRequest struct {
+	Name      string `json:"name,omitempty"`
+	ImagePath string `json:"image_path"`
+	CPUs      int    `json:"cpus,omitempty"`
+	Memory    string `json:"memory,omitempty"`
+	Disk      string `json:"disk,omitempty"`
+}
+
+type InstanceExport struct {
+	Message   string `json:"message,omitempty"`
+	ImagePath string `json:"image_path,omitempty"`
+}

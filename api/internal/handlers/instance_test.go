@@ -323,3 +323,157 @@ func TestRestart_Success(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
+
+func setupSnapshotRouter(client multipass.Client) *echo.Echo {
+	e := echo.New()
+	handler := NewInstanceHandler(client)
+	e.POST("/instances/:name/snapshots", handler.CreateSnapshot)
+	e.GET("/instances/:name/snapshots", handler.ListSnapshots)
+	e.POST("/instances/:name/snapshots/:id/restore", handler.RestoreSnapshot)
+	e.DELETE("/instances/:name/snapshots/:id", handler.DeleteSnapshot)
+	e.POST("/instances/:name/export", handler.Export)
+	e.POST("/instances/import", handler.Import)
+	return e
+}
+
+func TestCreateSnapshot_Success(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupSnapshotRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/snapshots", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Snapshot created")
+}
+
+func TestCreateSnapshot_EmptyName(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupSnapshotRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/instances//snapshots", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestListSnapshots_Success(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupSnapshotRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodGet, "/instances/test-vm/snapshots", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "snap1")
+}
+
+func TestListSnapshots_EmptyName(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupSnapshotRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodGet, "/instances//snapshots", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestRestoreSnapshot_Success(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupSnapshotRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/snapshots/snap1/restore", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Snapshot restored")
+}
+
+func TestRestoreSnapshot_EmptyName(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupSnapshotRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/instances//snapshots/snap1/restore", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestDeleteSnapshot_Success(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupSnapshotRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodDelete, "/instances/test-vm/snapshots/snap1", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "Snapshot deleted")
+}
+
+func TestExport_Success(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupSnapshotRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/export", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "exported successfully")
+}
+
+func TestExport_EmptyName(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupSnapshotRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/instances//export", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestImport_Success(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupSnapshotRouter(mockClient)
+
+	body := `{"image_path": "/path/to/image.img", "name": "imported-vm"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances/import", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusCreated, rec.Code)
+}
+
+func TestImport_MissingImagePath(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupSnapshotRouter(mockClient)
+
+	body := `{"name": "imported-vm"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances/import", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "image_path is required")
+}
