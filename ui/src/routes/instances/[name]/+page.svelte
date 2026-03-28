@@ -101,6 +101,9 @@
 		<div class="flex gap-2">
 			{#if instance}
 				{#if isRunning}
+					<a href="/instances/{name}/terminal">
+						<Button variant="secondary">Terminal</Button>
+					</a>
 					<Button variant="secondary" onclick={handleStop}>Stop</Button>
 					<Button variant="secondary" onclick={handleRestart}>Restart</Button>
 				{:else if isStopped}

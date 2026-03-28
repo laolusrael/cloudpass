@@ -14,13 +14,18 @@ import (
 type Client interface {
 	ListInstances() ([]models.Instance, error)
 	GetInstance(name string) (*models.Instance, error)
+	GetInstanceIP(name string) (string, error)
 	CreateInstance(opts models.CreateInstanceRequest) (*models.Instance, error)
 	StartInstance(name string) error
 	StopInstance(name string) error
 	RestartInstance(name string) error
+	SuspendInstance(name string) error
+	ResumeInstance(name string) error
 	DeleteInstance(name string) error
 	ListImages() ([]models.Image, error)
 	ListNetworks() ([]models.Network, error)
+	CreateNetwork(name string, mode string, mac string) error
+	DeleteNetwork(name string) error
 }
 
 type multipassClient struct {
@@ -235,6 +240,67 @@ func (c *multipassClient) DeleteInstance(name string) error {
 	_, err := cmd.Output()
 	if err != nil {
 		return fmt.Errorf("failed to delete instance: %w", err)
+	}
+
+	return nil
+}
+
+func (c *multipassClient) SuspendInstance(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "multipass", "suspend", name)
+	_, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to suspend instance: %w", err)
+	}
+
+	return nil
+}
+
+func (c *multipassClient) ResumeInstance(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "multipass", "start", name)
+	_, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to resume instance: %w", err)
+	}
+
+	return nil
+}
+
+func (c *multipassClient) CreateNetwork(name string, mode string, mac string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	args := []string{"networks", "create"}
+	if mode != "" {
+		args = append(args, "--mode", mode)
+	}
+	if mac != "" {
+		args = append(args, "--mac", mac)
+	}
+	args = append(args, name)
+
+	cmd := exec.CommandContext(ctx, "multipass", args...)
+	_, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to create network: %w", err)
+	}
+
+	return nil
+}
+
+func (c *multipassClient) DeleteNetwork(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, "multipass", "networks", "delete", name)
+	_, err := cmd.Output()
+	if err != nil {
+		return fmt.Errorf("failed to delete network: %w", err)
 	}
 
 	return nil

@@ -251,3 +251,73 @@ func (h *InstanceHandler) Restart(c echo.Context) error {
 		Message: "Instance restarted",
 	})
 }
+
+func (h *InstanceHandler) Suspend(c echo.Context) error {
+	name := c.Param("name")
+	if name == "" {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "instance name is required",
+		})
+	}
+
+	if err := validateInstanceName(name); err != nil {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+		})
+	}
+
+	err := h.client.SuspendInstance(name)
+	if err != nil {
+		if strings.Contains(err.Error(), "does not exist") {
+			return c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "not_found",
+				Message: err.Error(),
+			})
+		}
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "multipass_error",
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, models.InstanceResponse{
+		Message: "Instance suspended",
+	})
+}
+
+func (h *InstanceHandler) Resume(c echo.Context) error {
+	name := c.Param("name")
+	if name == "" {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "instance name is required",
+		})
+	}
+
+	if err := validateInstanceName(name); err != nil {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+		})
+	}
+
+	err := h.client.ResumeInstance(name)
+	if err != nil {
+		if strings.Contains(err.Error(), "does not exist") {
+			return c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "not_found",
+				Message: err.Error(),
+			})
+		}
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "multipass_error",
+			Message: err.Error(),
+		})
+	}
+
+	return c.JSON(http.StatusOK, models.InstanceResponse{
+		Message: "Instance resumed",
+	})
+}
