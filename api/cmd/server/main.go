@@ -4,6 +4,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -12,6 +13,7 @@ import (
 
 	"cloudpass/internal/config"
 	"cloudpass/internal/handlers"
+	"cloudpass/internal/logger"
 	"cloudpass/internal/middleware"
 	"cloudpass/internal/multipass"
 	"cloudpass/internal/web"
@@ -19,7 +21,6 @@ import (
 
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
-	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -63,16 +64,9 @@ func main() {
 		os.Exit(1)
 	}
 
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-	switch cfg.Logging.Level {
-	case "debug":
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-	case "warn":
-		zerolog.SetGlobalLevel(zerolog.WarnLevel)
-	case "error":
-		zerolog.SetGlobalLevel(zerolog.ErrorLevel)
-	default:
-		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	if err := logger.Init(cfg.Logging); err != nil {
+		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
+		os.Exit(1)
 	}
 
 	log.Info().Msg("starting cloudpass API server")
@@ -130,6 +124,8 @@ func main() {
 		WriteTimeout: 30 * time.Second,
 	}
 
+	printBanner(cfg.Server.Host, cfg.Server.Port)
+
 	go func() {
 		log.Info().Str("addr", addr).Msg("server listening")
 		if err := e.StartServer(srv); err != nil && err != http.ErrServerClosed {
@@ -151,4 +147,50 @@ func main() {
 	}
 
 	log.Info().Msg("server exited")
+}
+
+func printBanner(host string, port int) {
+	fmt.Println("")
+	fmt.Println("CloudPass is running!")
+	fmt.Println("")
+
+	urls := []string{}
+
+	if host == "0.0.0.0" || host == "127.0.0.1" || host == "localhost" {
+		urls = append(urls, fmt.Sprintf("  Web UI:  http://localhost:%d", port))
+		urls = append(urls, fmt.Sprintf("  API:     http://localhost:%d/api", port))
+
+		if localIP := getLocalIP(); localIP != "" {
+			urls = append(urls, fmt.Sprintf("  Web UI:  http://%s:%d", localIP, port))
+			urls = append(urls, fmt.Sprintf("  API:      http://%s:%d/api", localIP, port))
+		}
+	} else {
+		urls = append(urls, fmt.Sprintf("  Web UI:  http://%s:%d", host, port))
+		urls = append(urls, fmt.Sprintf("  API:     http://%s:%d/api", host, port))
+	}
+
+	for _, u := range urls {
+		fmt.Println(u)
+	}
+
+	fmt.Println("")
+	fmt.Println("Press Ctrl+C to stop")
+	fmt.Println("")
+}
+
+func getLocalIP() string {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return ""
+	}
+
+	for _, addr := range addrs {
+		if ipNet, ok := addr.(*net.IPNet); ok && ipNet.IP.To4() != nil {
+			if !ipNet.IP.IsLoopback() {
+				return ipNet.IP.String()
+			}
+		}
+	}
+
+	return ""
 }

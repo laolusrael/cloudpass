@@ -38,8 +38,31 @@ type MultipassConfig struct {
 }
 
 type LoggingConfig struct {
-	Level  string `yaml:"level"`
-	Format string `yaml:"format"`
+	Level  string          `yaml:"level"`
+	Format string          `yaml:"format"`
+	Output string          `yaml:"output"`
+	File   FileLogConfig   `yaml:"file"`
+	Syslog SyslogConfig    `yaml:"syslog"`
+	Levels ComponentLevels `yaml:"levels"`
+}
+
+type FileLogConfig struct {
+	Path       string `yaml:"path"`
+	MaxSizeMB  int    `yaml:"max_size_mb"`
+	MaxBackups int    `yaml:"max_backups"`
+	MaxAgeDays int    `yaml:"max_age_days"`
+	Compress   bool   `yaml:"compress"`
+}
+
+type SyslogConfig struct {
+	Address string `yaml:"address"`
+	Network string `yaml:"network"`
+}
+
+type ComponentLevels struct {
+	API       string `yaml:"api"`
+	Multipass string `yaml:"multipass"`
+	Websocket string `yaml:"websocket"`
 }
 
 var defaultConfig = Config{
@@ -57,7 +80,24 @@ var defaultConfig = Config{
 	},
 	Logging: LoggingConfig{
 		Level:  "info",
-		Format: "json",
+		Format: "console",
+		Output: "stdout",
+		File: FileLogConfig{
+			Path:       "/var/log/cloudpass.log",
+			MaxSizeMB:  10,
+			MaxBackups: 5,
+			MaxAgeDays: 30,
+			Compress:   true,
+		},
+		Syslog: SyslogConfig{
+			Address: "localhost:514",
+			Network: "udp",
+		},
+		Levels: ComponentLevels{
+			API:       "info",
+			Multipass: "info",
+			Websocket: "info",
+		},
 	},
 }
 

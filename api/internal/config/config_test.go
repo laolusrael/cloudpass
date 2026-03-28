@@ -72,7 +72,7 @@ func TestLoad_EmptyConfig(t *testing.T) {
 	assert.Equal(t, DetectSocketPath(), cfg.Multipass.SocketPath)
 	assert.Equal(t, 300, cfg.Multipass.DefaultTimeoutSec)
 	assert.Equal(t, "info", cfg.Logging.Level)
-	assert.Equal(t, "json", cfg.Logging.Format)
+	assert.Equal(t, "console", cfg.Logging.Format)
 }
 
 func TestLoad_PartialConfig(t *testing.T) {
