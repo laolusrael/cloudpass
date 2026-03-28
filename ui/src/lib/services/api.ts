@@ -76,6 +76,19 @@ class ApiService {
 		return this.request<NetworkList>('/networks');
 	}
 
+	async createNetwork(name: string, mode?: string, mac?: string): Promise<InstanceResponse> {
+		return this.request<InstanceResponse>('/networks', {
+			method: 'POST',
+			body: JSON.stringify({ name, mode, mac })
+		});
+	}
+
+	async deleteNetwork(name: string): Promise<InstanceResponse> {
+		return this.request<InstanceResponse>(`/networks/${encodeURIComponent(name)}`, {
+			method: 'DELETE'
+		});
+	}
+
 	async healthCheck(): Promise<{ status: string }> {
 		return this.request<{ status: string }>('/health');
 	}

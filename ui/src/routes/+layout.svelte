@@ -23,6 +23,9 @@
 					<a href="/instances" class="text-sm font-medium text-gray-700 hover:text-gray-900">
 						Instances
 					</a>
+					<a href="/networks" class="text-sm font-medium text-gray-700 hover:text-gray-900">
+						Networks
+					</a>
 				</nav>
 			</div>
 		</div>

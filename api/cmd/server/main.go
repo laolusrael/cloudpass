@@ -13,6 +13,7 @@ import (
 	"cloudpass/internal/handlers"
 	"cloudpass/internal/middleware"
 	"cloudpass/internal/multipass"
+	"cloudpass/internal/websocket"
 
 	"github.com/labstack/echo/v4"
 	echoMiddleware "github.com/labstack/echo/v4/middleware"
@@ -57,6 +58,7 @@ func main() {
 	imageHandler := handlers.NewImageHandler(mpClient)
 	networkHandler := handlers.NewNetworkHandler(mpClient)
 	healthHandler := handlers.NewHealthHandler()
+	terminalHandler := websocket.NewTerminalHandler(mpClient)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -79,9 +81,14 @@ func main() {
 	api.POST("/instances/:name/start", instanceHandler.Start)
 	api.POST("/instances/:name/stop", instanceHandler.Stop)
 	api.POST("/instances/:name/restart", instanceHandler.Restart)
+	api.POST("/instances/:name/suspend", instanceHandler.Suspend)
+	api.POST("/instances/:name/resume", instanceHandler.Resume)
+	api.GET("/instances/:name/terminal", terminalHandler.HandleTerminal)
 
 	api.GET("/images", imageHandler.List)
 	api.GET("/networks", networkHandler.List)
+	api.POST("/networks", networkHandler.Create)
+	api.DELETE("/networks/:name", networkHandler.Delete)
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
