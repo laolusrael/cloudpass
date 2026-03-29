@@ -8,6 +8,10 @@ echo === Building CloudPass v%VERSION% ===
 
 cd /d "%~dp0"
 
+echo >>> Cleaning up...
+if exist "ui\build" rmdir /S /Q "ui\build"
+if exist "api\internal\web\build" rmdir /S /Q "api\internal\web\build"
+
 echo >>> Building UI...
 cd ui
 call npm ci --silent

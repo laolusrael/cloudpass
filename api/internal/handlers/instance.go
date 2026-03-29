@@ -49,6 +49,10 @@ func (h *InstanceHandler) List(c echo.Context) error {
 	for i := range instances {
 		instance, err := h.client.GetInstance(instances[i].Name)
 		if err != nil {
+			logger.API.Warn().
+				Str("name", instances[i].Name).
+				Err(err).
+				Msg("failed to get instance details, using basic info")
 			continue
 		}
 		instances[i] = *instance
