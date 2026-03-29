@@ -129,7 +129,7 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 		} `json:"disks"`
 		Image   string `json:"image_release"`
 		Release string `json:"release"`
-		Mounts  []struct {
+		Mounts  map[string]struct {
 			SourcePath string `json:"source_path"`
 			TargetPath string `json:"target_path"`
 		} `json:"mounts"`
@@ -164,10 +164,10 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 		break // Use first disk
 	}
 
-	for _, m := range i.Mounts {
+	for targetPath, m := range i.Mounts {
 		instance.Mounts = append(instance.Mounts, models.Mount{
 			Source: m.SourcePath,
-			Target: m.TargetPath,
+			Target: targetPath,
 		})
 	}
 
