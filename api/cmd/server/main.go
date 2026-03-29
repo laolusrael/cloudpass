@@ -120,7 +120,7 @@ func main() {
 	api.GET("/config", configHandler.Get)
 	api.POST("/config", configHandler.Update)
 
-	e.GET("/*", web.StaticHandler())
+	e.GET("/*", web.StaticHandlerWithFallback())
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
