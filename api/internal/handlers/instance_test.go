@@ -477,3 +477,105 @@ func TestImport_MissingImagePath(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "image_path is required")
 }
+
+func setupMountRouter(client multipass.Client) *echo.Echo {
+	e := echo.New()
+	handler := NewInstanceHandler(client)
+	e.POST("/instances/:name/mounts", handler.Mount)
+	e.DELETE("/instances/:name/mounts", handler.Unmount)
+	return e
+}
+
+func TestMount_Success(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	assert.Contains(t, rec.Body.String(), "mounted")
+}
+
+func TestMount_MissingSourcePath(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"target_path": "/home/ubuntu/projects"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "source_path is required")
+}
+
+func TestMount_MissingTargetPath(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"source_path": "/home/user/projects"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "target_path is required")
+}
+
+func TestMount_EmptyName(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances//mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestUnmount_Success(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"target_path": "/home/ubuntu/projects"}`
+	req := httptest.NewRequest(http.MethodDelete, "/instances/test-vm/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "unmounted")
+}
+
+func TestUnmount_MissingTargetPath(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
+
+	e := setupMountRouter(mockClient)
+
+	body := `{}`
+	req := httptest.NewRequest(http.MethodDelete, "/instances/test-vm/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "target_path is required")
+}

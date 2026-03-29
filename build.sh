@@ -27,13 +27,13 @@ build() {
     local arch=$2
     local ext=""
     [ "$os" = "windows" ] && ext=".exe"
-    
+
     echo "Building for $os/$arch..."
     GOOS=$os GOARCH=$arch CGO_ENABLED=0 go build -ldflags="-s -w" -o "../cloudpass-$os-$arch$ext" ./cmd/server
 }
 
-build linux amd64
 build linux arm64
+build linux amd64
 build darwin amd64
 build darwin arm64
 build windows amd64
@@ -41,8 +41,8 @@ build windows amd64
 cd ..
 
 echo ">>> Creating archive..."
-tar -czvf "cloudpass-$VERSION-linux-amd64.tar.gz" cloudpass-linux-amd64
 tar -czvf "cloudpass-$VERSION-linux-arm64.tar.gz" cloudpass-linux-arm64
+tar -czvf "cloudpass-$VERSION-linux-amd64.tar.gz" cloudpass-linux-amd64
 tar -czvf "cloudpass-$VERSION-darwin-amd64.tar.gz" cloudpass-darwin-amd64
 tar -czvf "cloudpass-$VERSION-darwin-arm64.tar.gz" cloudpass-darwin-arm64
 zip -q "cloudpass-$VERSION-windows-amd64.zip" cloudpass-windows-amd64.exe

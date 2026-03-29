@@ -1,0 +1,26 @@
+server:
+    host: 0.0.0.0
+    port: 8080
+security:
+    allowed_ips: []
+    websocket_idle_timeout_minutes: 30
+multipass:
+    socket_path: \\.\pipe\multipass
+    default_timeout_seconds: 300
+logging:
+    level: info
+    format: console
+    output: stdout
+    file:
+        path: /var/log/cloudpass.log
+        max_size_mb: 10
+        max_backups: 5
+        max_age_days: 30
+        compress: true
+    syslog:
+        address: localhost:514
+        network: udp
+    levels:
+        api: info
+        multipass: info
+        websocket: info

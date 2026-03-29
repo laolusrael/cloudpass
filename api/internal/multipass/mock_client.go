@@ -162,6 +162,14 @@ func (m *MockClient) SetListNetworksErr(err error) {
 	m.listNetworksErr = err
 }
 
+func (m *MockClient) MountInstance(instanceName string, sourcePath string, targetPath string) error {
+	return nil
+}
+
+func (m *MockClient) UnmountInstance(instanceName string, targetPath string) error {
+	return nil
+}
+
 func (m *MockClient) PurgeDeleted() error {
 	return nil
 }

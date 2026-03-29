@@ -6,6 +6,7 @@
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 
 	let networks = $state<Network[]>([]);
 	let loading = $state(true);
@@ -115,39 +116,40 @@
 	{/if}
 </div>
 
-{#if showCreateModal}
-	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-		<div class="bg-white rounded-lg p-6 w-full max-w-md">
-			<h3 class="text-lg font-medium mb-4">Create Network</h3>
-			<div class="space-y-4">
-				<div>
-					<label for="network-name" class="block text-sm font-medium text-gray-700 mb-1">Network Name</label>
-					<input
-						id="network-name"
-						type="text"
-						bind:value={newNetworkName}
-						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
-						placeholder="my-network"
-					/>
-				</div>
-				<div>
-					<label for="network-mode" class="block text-sm font-medium text-gray-700 mb-1">Mode (optional)</label>
-					<select
-						id="network-mode"
-						bind:value={newNetworkMode}
-						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
-					>
-						<option value="">Auto</option>
-						<option value="manual">Manual</option>
-					</select>
-				</div>
-			</div>
-			<div class="mt-6 flex justify-end gap-3">
-				<Button variant="secondary" onclick={() => (showCreateModal = false)}>Cancel</Button>
-				<Button variant="primary" onclick={handleCreate} disabled={creating}>
-					{creating ? 'Creating...' : 'Create'}
-				</Button>
-			</div>
+{#snippet modalBody()}
+	<div class="space-y-4">
+		<div>
+			<label for="network-name" class="block text-sm font-medium text-gray-700 mb-1">Network Name</label>
+			<input
+				id="network-name"
+				type="text"
+				bind:value={newNetworkName}
+				class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+				placeholder="my-network"
+			/>
+		</div>
+		<div>
+			<label for="network-mode" class="block text-sm font-medium text-gray-700 mb-1">Mode (optional)</label>
+			<select
+				id="network-mode"
+				bind:value={newNetworkMode}
+				class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+			>
+				<option value="">Auto</option>
+				<option value="manual">Manual</option>
+			</select>
 		</div>
 	</div>
-{/if}
+{/snippet}
+
+{#snippet modalFooter()}
+	<Button variant="secondary" onclick={() => (showCreateModal = false)}>Cancel</Button>
+	<Button variant="primary" onclick={handleCreate} disabled={creating}>
+		{creating ? 'Creating...' : 'Create'}
+	</Button>
+{/snippet}
+
+<Modal open={showCreateModal} title="Create Network" onclose={() => (showCreateModal = false)}>
+	{@render modalBody()}
+	{@render modalFooter()}
+</Modal>

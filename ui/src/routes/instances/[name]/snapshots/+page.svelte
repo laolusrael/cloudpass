@@ -6,6 +6,7 @@
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import Table from '$lib/components/Table.svelte';
 
 	let snapshots = $state<Snapshot[]>([]);
 	let loading = $state(true);
@@ -126,57 +127,40 @@
 		</div>
 	</Card>
 
-	{#if loading}
-		<div class="py-12">
-			<Spinner size="lg" />
-		</div>
-	{:else if snapshots.length === 0}
-		<div class="text-center py-12 bg-white rounded border border-gray-200">
-			<p class="text-gray-500">No snapshots found</p>
-		</div>
-	{:else}
-		<div class="bg-white rounded border border-gray-200 overflow-hidden">
-			<table class="min-w-full divide-y divide-gray-200">
-				<thead class="bg-gray-50">
-					<tr>
-						<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
-						<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
-						<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Comment</th>
-						<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Disk Size</th>
-						<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Actions</th>
-					</tr>
-				</thead>
-				<tbody class="divide-y divide-gray-200">
-					{#each snapshots as snapshot}
-						<tr>
-							<td class="px-6 py-4 whitespace-nowrap text-sm font-medium">{snapshot.name}</td>
-							<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-								{snapshot.created_at ? new Date(snapshot.created_at).toLocaleString() : '-'}
-							</td>
-							<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-								{snapshot.comment || '-'}
-							</td>
-							<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-								{formatSize(snapshot.disk_size)}
-							</td>
-							<td class="px-6 py-4 whitespace-nowrap text-sm">
-								<div class="flex gap-2">
-									<Button
-										variant="secondary"
-										onclick={() => handleRestore(snapshot.name)}
-										disabled={restoring === snapshot.name}
-									>
-										{restoring === snapshot.name ? 'Restoring...' : 'Restore'}
-									</Button>
-									<Button variant="danger" onclick={() => handleDelete(snapshot.name)}>
-										Delete
-									</Button>
-								</div>
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	{/if}
+{#snippet actions(snapshot: Snapshot)}
+	<div class="flex gap-2 justify-end">
+		<Button
+			variant="secondary"
+			size="sm"
+			onclick={() => handleRestore(snapshot.name)}
+			disabled={restoring === snapshot.name}
+		>
+			{restoring === snapshot.name ? 'Restoring...' : 'Restore'}
+		</Button>
+		<Button variant="danger" size="sm" onclick={() => handleDelete(snapshot.name)}>
+			Delete
+		</Button>
+	</div>
+{/snippet}
+
+{#if loading}
+	<div class="py-12">
+		<Spinner size="lg" />
+	</div>
+{:else if snapshots.length === 0}
+	<div class="text-center py-12 bg-white rounded border border-gray-200">
+		<p class="text-gray-500">No snapshots found</p>
+	</div>
+{:else}
+	<Table
+		data={snapshots}
+		columns={[
+			{ key: 'name', header: 'Name', sortable: true },
+			{ key: 'created_at', header: 'Created', sortable: true, render: (s) => s.created_at ? new Date(s.created_at).toLocaleString() : '-' },
+			{ key: 'comment', header: 'Comment', sortable: true, render: (s) => s.comment || '-' },
+			{ key: 'disk_size', header: 'Disk Size', sortable: true, render: (s) => formatSize(s.disk_size) }
+		]}
+		{actions}
+	/>
+{/if}
 </div>

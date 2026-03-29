@@ -127,3 +127,58 @@ export interface InstanceExport {
 	message: string;
 	image_path?: string;
 }
+
+export interface MountRequest {
+	source_path: string;
+	target_path: string;
+}
+
+export interface UnmountRequest {
+	target_path: string;
+}
+
+export interface MountResponse {
+	message?: string;
+	source?: string;
+	target?: string;
+}
+
+export interface ConfigResponse {
+	server: {
+		host: string;
+		port: number;
+	};
+	security: {
+		allowed_ips: string[];
+		websocket_timeout_minutes: number;
+	};
+	multipass: {
+		socket_path: string;
+		default_timeout_seconds: number;
+	};
+	logging: {
+		level: string;
+		format: string;
+		output: string;
+	};
+}
+
+export interface ConfigUpdateRequest {
+	server?: {
+		host?: string;
+		port?: number;
+	};
+	security?: {
+		allowed_ips?: string[];
+		websocket_timeout_minutes?: number;
+	};
+	multipass?: {
+		socket_path?: string;
+		default_timeout_seconds?: number;
+	};
+	logging?: {
+		level?: string;
+		format?: string;
+		output?: string;
+	};
+}

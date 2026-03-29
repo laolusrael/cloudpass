@@ -133,3 +133,74 @@ type InstanceExport struct {
 	Message   string `json:"message,omitempty"`
 	ImagePath string `json:"image_path,omitempty"`
 }
+
+type MountRequest struct {
+	SourcePath string `json:"source_path"`
+	TargetPath string `json:"target_path"`
+}
+
+type UnmountRequest struct {
+	TargetPath string `json:"target_path"`
+}
+
+type MountResponse struct {
+	Message string `json:"message,omitempty"`
+	Source  string `json:"source,omitempty"`
+	Target  string `json:"target,omitempty"`
+}
+
+type ServerConfigResponse struct {
+	Host string `json:"host"`
+	Port int    `json:"port"`
+}
+
+type SecurityConfigResponse struct {
+	AllowedIPs          []string `json:"allowed_ips"`
+	WebsocketTimeoutMin int      `json:"websocket_timeout_minutes"`
+}
+
+type MultipassConfigResponse struct {
+	SocketPath        string `json:"socket_path"`
+	DefaultTimeoutSec int    `json:"default_timeout_seconds"`
+}
+
+type LoggingConfigResponse struct {
+	Level  string `json:"level"`
+	Format string `json:"format"`
+	Output string `json:"output"`
+}
+
+type ConfigResponse struct {
+	Server    ServerConfigResponse    `json:"server"`
+	Security  SecurityConfigResponse  `json:"security"`
+	Multipass MultipassConfigResponse `json:"multipass"`
+	Logging   LoggingConfigResponse   `json:"logging"`
+}
+
+type ConfigUpdateRequest struct {
+	Server    *ServerUpdateRequest    `json:"server,omitempty"`
+	Security  *SecurityUpdateRequest  `json:"security,omitempty"`
+	Multipass *MultipassUpdateRequest `json:"multipass,omitempty"`
+	Logging   *LoggingUpdateRequest   `json:"logging,omitempty"`
+}
+
+type ServerUpdateRequest struct {
+	Host string `json:"host,omitempty"`
+	Port int    `json:"port,omitempty"`
+}
+
+type SecurityUpdateRequest struct {
+	AllowedIPs          []string `json:"allowed_ips,omitempty"`
+	WebsocketTimeoutMin int      `json:"websocket_timeout_minutes,omitempty"`
+}
+
+type MultipassUpdateRequest struct {
+	SocketPath        string `json:"socket_path,omitempty"`
+	DefaultTimeoutSec int    `json:"default_timeout_seconds,omitempty"`
+}
+
+type LoggingUpdateRequest struct {
+	Level  string `json:"level,omitempty"`
+	Format string `json:"format,omitempty"`
+	Output string `json:"output,omitempty"`
+}

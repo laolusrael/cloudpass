@@ -9,7 +9,11 @@ import type {
 	SnapshotList,
 	CreateSnapshotRequest,
 	InstanceExport,
-	ImportInstanceRequest
+	ImportInstanceRequest,
+	MountRequest,
+	MountResponse,
+	ConfigResponse,
+	ConfigUpdateRequest
 } from '$lib/types';
 
 const API_BASE = '/api';
@@ -135,6 +139,31 @@ class ApiService {
 
 	async importInstance(request: ImportInstanceRequest): Promise<Instance> {
 		return this.request<Instance>('/instances/import', {
+			method: 'POST',
+			body: JSON.stringify(request)
+		});
+	}
+
+	async mountInstance(instanceName: string, request: MountRequest): Promise<MountResponse> {
+		return this.request<MountResponse>(`/instances/${encodeURIComponent(instanceName)}/mounts`, {
+			method: 'POST',
+			body: JSON.stringify(request)
+		});
+	}
+
+	async unmountInstance(instanceName: string, targetPath: string): Promise<MountResponse> {
+		return this.request<MountResponse>(`/instances/${encodeURIComponent(instanceName)}/mounts`, {
+			method: 'DELETE',
+			body: JSON.stringify({ target_path: targetPath })
+		});
+	}
+
+	async getConfig(): Promise<ConfigResponse> {
+		return this.request<ConfigResponse>('/config');
+	}
+
+	async updateConfig(request: ConfigUpdateRequest): Promise<InstanceResponse> {
+		return this.request<InstanceResponse>('/config', {
 			method: 'POST',
 			body: JSON.stringify(request)
 		});
