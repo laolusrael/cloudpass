@@ -100,7 +100,7 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 	}
 
 	var info struct {
-		Info []struct {
+		Info struct {
 			Name      string   `json:"name"`
 			State     string   `json:"state"`
 			IPv4      []string `json:"ipv4"`
@@ -126,11 +126,11 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 		return nil, fmt.Errorf("failed to parse info output: %w", err)
 	}
 
-	if len(info.Info) == 0 {
+	if info.Info.Name == "" {
 		return nil, fmt.Errorf("instance %q not found", name)
 	}
 
-	i := info.Info[0]
+	i := info.Info
 	instance := &models.Instance{
 		Name:    i.Name,
 		State:   i.State,
@@ -153,8 +153,8 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 		})
 	}
 
-	for name, net := range i.Network {
-		instance.Network[name] = models.NetworkInfo{
+	for netName, net := range i.Network {
+		instance.Network[netName] = models.NetworkInfo{
 			IPv4: net.IPv4,
 			IPv6: net.IPv6,
 		}
