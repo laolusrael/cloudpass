@@ -7,6 +7,10 @@ cd "$BUILD_DIR"
 
 echo "=== Building CloudPass v$VERSION ==="
 
+echo ">>> Cleaning up..."
+rm -rf ui/build
+rm -rf api/internal/web/build
+
 echo ">>> Building UI..."
 cd ui
 npm ci --silent
