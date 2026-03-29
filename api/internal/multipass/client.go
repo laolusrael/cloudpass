@@ -382,14 +382,16 @@ func (c *multipassClient) ListNetworks() ([]models.Network, error) {
 		return nil, fmt.Errorf("failed to list networks: %w", err)
 	}
 
-	var networks []models.Network
-	if err := json.Unmarshal(output, &networks); err != nil {
+	var result struct {
+		Networks []models.Network `json:"networks"`
+	}
+	if err := json.Unmarshal(output, &result); err != nil {
 		logger.Multipass.Error().Err(err).Msg("failed to parse networks")
 		return nil, fmt.Errorf("failed to parse networks: %w", err)
 	}
 
-	logger.Multipass.Debug().Int("count", len(networks)).Msg("listed networks")
-	return networks, nil
+	logger.Multipass.Debug().Int("count", len(result.Networks)).Msg("listed networks")
+	return result.Networks, nil
 }
 
 func (c *multipassClient) MountInstance(instanceName string, sourcePath string, targetPath string) error {
