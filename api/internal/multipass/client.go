@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -99,51 +100,68 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 		return nil, fmt.Errorf("failed to get instance info: %w", err)
 	}
 
-	var info struct {
-		Info struct {
-			Name      string   `json:"name"`
-			State     string   `json:"state"`
-			IPv4      []string `json:"ipv4"`
-			IPv6      []string `json:"ipv6"`
-			CPUs      int      `json:"cpus"`
-			Memory    string   `json:"memory"`
-			DiskSpace string   `json:"disk_space"`
-			Image     string   `json:"image"`
-			Release   string   `json:"release"`
-			Mounts    []struct {
-				SourcePath string `json:"source_path"`
-				TargetPath string `json:"target_path"`
-			} `json:"mounts"`
-			Load    []float64 `json:"load"`
-			Network map[string]struct {
-				IPv4 string `json:"ipv4"`
-				IPv6 string `json:"ipv6"`
-			} `json:"network"`
-		} `json:"info"`
+	var raw struct {
+		Info map[string]json.RawMessage `json:"info"`
 	}
 
-	if err := json.Unmarshal(output, &info); err != nil {
+	if err := json.Unmarshal(output, &raw); err != nil {
 		return nil, fmt.Errorf("failed to parse info output: %w", err)
 	}
 
-	if info.Info.Name == "" {
+	instanceData, ok := raw.Info[name]
+	if !ok {
 		return nil, fmt.Errorf("instance %q not found", name)
 	}
 
-	i := info.Info
+	var i struct {
+		Name     string   `json:"name"`
+		State    string   `json:"state"`
+		IPv4     []string `json:"ipv4"`
+		IPv6     []string `json:"ipv6"`
+		CPUCount string   `json:"cpu_count"`
+		Memory   struct {
+			Total uint64 `json:"total"`
+			Used  uint64 `json:"used"`
+		} `json:"memory"`
+		Disks map[string]struct {
+			Total string `json:"total"`
+			Used  string `json:"used"`
+		} `json:"disks"`
+		Image   string `json:"image_release"`
+		Release string `json:"release"`
+		Mounts  []struct {
+			SourcePath string `json:"source_path"`
+			TargetPath string `json:"target_path"`
+		} `json:"mounts"`
+		Load    []float64 `json:"load"`
+		Network map[string]struct {
+			IPv4 string `json:"ipv4"`
+			IPv6 string `json:"ipv6"`
+		} `json:"network"`
+	}
+
+	if err := json.Unmarshal(instanceData, &i); err != nil {
+		return nil, fmt.Errorf("failed to parse instance data: %w", err)
+	}
+
 	instance := &models.Instance{
-		Name:    i.Name,
+		Name:    name,
 		State:   i.State,
 		IPv4:    i.IPv4,
 		IPv6:    i.IPv6,
-		CPU:     i.CPUs,
-		Memory:  i.Memory,
-		Disk:    i.DiskSpace,
+		CPU:     parseCPU(i.CPUCount),
+		Memory:  formatBytes(i.Memory.Total),
 		Image:   i.Image,
 		Release: i.Release,
 		Load:    i.Load,
 		Mounts:  make([]models.Mount, 0),
 		Network: make(map[string]models.NetworkInfo),
+	}
+
+	// Calculate disk space from disks map
+	for _, disk := range i.Disks {
+		instance.Disk = formatBytes(parseBytes(disk.Total))
+		break // Use first disk
 	}
 
 	for _, m := range i.Mounts {
@@ -664,4 +682,42 @@ func (c *multipassClient) ImportInstance(imagePath string, name string, cpus int
 	}
 
 	return c.GetInstance(name)
+}
+
+func parseCPU(cpuStr string) int {
+	if cpuStr == "" {
+		return 0
+	}
+	n, err := strconv.Atoi(cpuStr)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+func parseBytes(s string) uint64 {
+	if s == "" {
+		return 0
+	}
+	n, err := strconv.ParseUint(s, 10, 64)
+	if err != nil {
+		return 0
+	}
+	return n
+}
+
+func formatBytes(n uint64) string {
+	if n == 0 {
+		return "0 B"
+	}
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := uint64(unit), 0
+	for n >= div*unit {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
 }
