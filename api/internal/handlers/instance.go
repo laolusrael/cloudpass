@@ -623,3 +623,125 @@ func (h *InstanceHandler) DeleteSnapshot(c echo.Context) error {
 		Message: "Snapshot deleted",
 	})
 }
+
+func (h *InstanceHandler) Mount(c echo.Context) error {
+	name := c.Param("name")
+	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "instance name is required",
+		})
+	}
+
+	if err := validateInstanceName(name); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+		})
+	}
+
+	var req models.MountRequest
+	if err := c.Bind(&req); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Msg("invalid request body")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "invalid request body",
+		})
+	}
+
+	if req.SourcePath == "" {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "source_path is required",
+		})
+	}
+
+	if req.TargetPath == "" {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "target_path is required",
+		})
+	}
+
+	err := h.client.MountInstance(name, req.SourcePath, req.TargetPath)
+	if err != nil {
+		if strings.Contains(err.Error(), "does not exist") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
+			return c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "not_found",
+				Message: err.Error(),
+			})
+		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to mount directory")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "multipass_error",
+			Message: err.Error(),
+		})
+	}
+
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("source", req.SourcePath).Str("target", req.TargetPath).Msg("directory mounted")
+	return c.JSON(http.StatusCreated, models.MountResponse{
+		Message: "Directory mounted",
+		Source:  req.SourcePath,
+		Target:  req.TargetPath,
+	})
+}
+
+func (h *InstanceHandler) Unmount(c echo.Context) error {
+	name := c.Param("name")
+	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "instance name is required",
+		})
+	}
+
+	if err := validateInstanceName(name); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+		})
+	}
+
+	var req models.UnmountRequest
+	if err := c.Bind(&req); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Msg("invalid request body")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "invalid request body",
+		})
+	}
+
+	if req.TargetPath == "" {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "target_path is required",
+		})
+	}
+
+	err := h.client.UnmountInstance(name, req.TargetPath)
+	if err != nil {
+		if strings.Contains(err.Error(), "does not exist") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
+			return c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "not_found",
+				Message: err.Error(),
+			})
+		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to unmount directory")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "multipass_error",
+			Message: err.Error(),
+		})
+	}
+
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("target", req.TargetPath).Msg("directory unmounted")
+	return c.JSON(http.StatusOK, models.MountResponse{
+		Message: "Directory unmounted",
+		Target:  req.TargetPath,
+	})
+}

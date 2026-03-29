@@ -77,6 +77,7 @@ func main() {
 	imageHandler := handlers.NewImageHandler(mpClient)
 	networkHandler := handlers.NewNetworkHandler(mpClient)
 	healthHandler := handlers.NewHealthHandler()
+	configHandler := handlers.NewConfigHandler(configPath)
 	terminalHandler := websocket.NewTerminalHandler(mpClient)
 
 	e := echo.New()
@@ -108,12 +109,16 @@ func main() {
 	api.GET("/instances/:name/snapshots", instanceHandler.ListSnapshots)
 	api.POST("/instances/:name/snapshots/:id/restore", instanceHandler.RestoreSnapshot)
 	api.DELETE("/instances/:name/snapshots/:id", instanceHandler.DeleteSnapshot)
+	api.POST("/instances/:name/mounts", instanceHandler.Mount)
+	api.DELETE("/instances/:name/mounts", instanceHandler.Unmount)
 	api.GET("/instances/:name/terminal", terminalHandler.HandleTerminal)
 
 	api.GET("/images", imageHandler.List)
 	api.GET("/networks", networkHandler.List)
 	api.POST("/networks", networkHandler.Create)
 	api.DELETE("/networks/:name", networkHandler.Delete)
+	api.GET("/config", configHandler.Get)
+	api.POST("/config", configHandler.Update)
 
 	e.GET("/*", web.StaticHandler())
 

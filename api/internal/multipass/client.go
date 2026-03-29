@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"os"
 	"os/exec"
 	"strings"
 	"time"
@@ -28,6 +29,8 @@ type Client interface {
 	ListNetworks() ([]models.Network, error)
 	CreateNetwork(name string, mode string, mac string) error
 	DeleteNetwork(name string) error
+	MountInstance(instanceName string, sourcePath string, targetPath string) error
+	UnmountInstance(instanceName string, targetPath string) error
 	CreateSnapshot(instanceName string, snapshotName string, comment string) error
 	RestoreSnapshot(instanceName string, snapshotName string) error
 	ListSnapshots(instanceName string) ([]models.Snapshot, error)
@@ -387,6 +390,69 @@ func (c *multipassClient) ListNetworks() ([]models.Network, error) {
 
 	logger.Multipass.Debug().Int("count", len(networks)).Msg("listed networks")
 	return networks, nil
+}
+
+func (c *multipassClient) MountInstance(instanceName string, sourcePath string, targetPath string) error {
+	if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
+		return fmt.Errorf("source path %q does not exist", sourcePath)
+	} else if err != nil {
+		return fmt.Errorf("cannot access source path %q: %w", sourcePath, err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	args := []string{"mount", sourcePath, instanceName + ":" + targetPath}
+
+	logger.Multipass.Info().
+		Str("instance", instanceName).
+		Str("source", sourcePath).
+		Str("target", targetPath).
+		Msg("mounting directory")
+
+	cmd := exec.CommandContext(ctx, "multipass", args...)
+	_, err := cmd.Output()
+	if err != nil {
+		logger.Multipass.Error().
+			Err(err).
+			Str("instance", instanceName).
+			Msg("failed to mount directory")
+		return fmt.Errorf("failed to mount directory: %w", err)
+	}
+
+	logger.Multipass.Info().
+		Str("instance", instanceName).
+		Str("target", targetPath).
+		Msg("directory mounted")
+	return nil
+}
+
+func (c *multipassClient) UnmountInstance(instanceName string, targetPath string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	args := []string{"umount", instanceName + ":" + targetPath}
+
+	logger.Multipass.Info().
+		Str("instance", instanceName).
+		Str("target", targetPath).
+		Msg("unmounting directory")
+
+	cmd := exec.CommandContext(ctx, "multipass", args...)
+	_, err := cmd.Output()
+	if err != nil {
+		logger.Multipass.Error().
+			Err(err).
+			Str("instance", instanceName).
+			Msg("failed to unmount directory")
+		return fmt.Errorf("failed to unmount directory: %w", err)
+	}
+
+	logger.Multipass.Info().
+		Str("instance", instanceName).
+		Str("target", targetPath).
+		Msg("directory unmounted")
+	return nil
 }
 
 func (c *multipassClient) PurgeDeleted() error {

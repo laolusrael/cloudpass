@@ -13,6 +13,10 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let refreshInterval: ReturnType<typeof setInterval>;
+	let showMountModal = $state(false);
+	let mountSourcePath = $state('');
+	let mountTargetPath = $state('');
+	let mounting = $state(false);
 
 	const name = $derived($page.params.name);
 
@@ -100,6 +104,38 @@
 			goto('/');
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to import';
+		}
+	}
+
+	async function handleMount() {
+		if (!instance || !mountSourcePath.trim() || !mountTargetPath.trim()) return;
+		mounting = true;
+		error = null;
+		try {
+			await api.mountInstance(instance.name, {
+				source_path: mountSourcePath.trim(),
+				target_path: mountTargetPath.trim()
+			});
+			showMountModal = false;
+			mountSourcePath = '';
+			mountTargetPath = '';
+			await loadInstance();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to mount';
+		} finally {
+			mounting = false;
+		}
+	}
+
+	async function handleUnmount(targetPath: string) {
+		if (!instance) return;
+		if (confirm(`Unmount "${targetPath}"?`)) {
+			try {
+				await api.unmountInstance(instance.name, targetPath);
+				await loadInstance();
+			} catch (e) {
+				error = e instanceof Error ? e.message : 'Failed to unmount';
+			}
 		}
 	}
 
@@ -218,14 +254,24 @@
 			</Card>
 
 			<Card>
-				<h3 class="text-sm font-medium text-gray-500 mb-3">Mounts</h3>
+				<div class="flex items-center justify-between mb-3">
+					<h3 class="text-sm font-medium text-gray-500">Mounts</h3>
+					{#if isRunning}
+						<Button variant="secondary" onclick={() => (showMountModal = true)}>Add Mount</Button>
+					{/if}
+				</div>
 				{#if instance.mounts && instance.mounts.length > 0}
 					<ul class="space-y-2">
 						{#each instance.mounts as mount}
-							<li class="text-sm">
-								<span class="font-mono">{mount.source}</span>
-								<span class="text-gray-400"> → </span>
-								<span class="font-mono">{mount.target}</span>
+							<li class="flex items-center justify-between text-sm">
+								<span>
+									<span class="font-mono">{mount.source}</span>
+									<span class="text-gray-400"> → </span>
+									<span class="font-mono">{mount.target}</span>
+								</span>
+								{#if isRunning}
+									<Button variant="danger" onclick={() => handleUnmount(mount.target)}>Unmount</Button>
+								{/if}
 							</li>
 						{/each}
 					</ul>
@@ -240,3 +286,55 @@
 		</div>
 	{/if}
 </div>
+
+{#if showMountModal}
+	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+		<div class="bg-white rounded-lg p-6 w-full max-w-md">
+			<h3 class="text-lg font-medium mb-4">Add Mount</h3>
+			<p class="text-sm text-gray-500 mb-4">
+				Enter the host path to mount into the instance. If the path does not exist, you will be prompted to create it.
+			</p>
+			<div class="space-y-4">
+				<div>
+					<label for="mount-source" class="block text-sm font-medium text-gray-700 mb-1">
+						Host Path (source)
+					</label>
+					<input
+						id="mount-source"
+						type="text"
+						bind:value={mountSourcePath}
+						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+						placeholder="/home/user/projects"
+					/>
+				</div>
+				<div>
+					<label for="mount-target" class="block text-sm font-medium text-gray-700 mb-1">
+						Instance Path (target)
+					</label>
+					<input
+						id="mount-target"
+						type="text"
+						bind:value={mountTargetPath}
+						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+						placeholder="/home/ubuntu/projects"
+					/>
+				</div>
+			</div>
+			{#if error}
+				<div class="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+					<p class="text-sm text-red-600">{error}</p>
+				</div>
+			{/if}
+			<div class="mt-6 flex justify-end gap-3">
+				<Button variant="secondary" onclick={() => (showMountModal = false)}>Cancel</Button>
+				<Button
+					variant="primary"
+					onclick={handleMount}
+					disabled={mounting || !mountSourcePath.trim() || !mountTargetPath.trim()}
+				>
+					{mounting ? 'Mounting...' : 'Mount'}
+				</Button>
+			</div>
+		</div>
+	</div>
+{/if}
