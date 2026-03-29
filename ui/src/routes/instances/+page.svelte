@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { instances } from '$lib/stores/instances';
 	import { notifications } from '$lib/stores/notifications';
 	import InstanceCard from '$lib/components/InstanceCard.svelte';
@@ -7,19 +7,9 @@
 	import Spinner from '$lib/components/Spinner.svelte';
 
 	let loading = $state(true);
-	let refreshInterval: ReturnType<typeof setInterval>;
 
 	onMount(() => {
 		instances.refresh();
-		refreshInterval = setInterval(() => {
-			instances.refresh();
-		}, 10000);
-	});
-
-	onDestroy(() => {
-		if (refreshInterval) {
-			clearInterval(refreshInterval);
-		}
 	});
 
 	instances.loading.subscribe((l) => (loading = l));

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/services/api';
@@ -12,7 +12,6 @@
 	let instance = $state<Instance | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-	let refreshInterval: ReturnType<typeof setInterval>;
 	let showMountModal = $state(false);
 	let mountSourcePath = $state('');
 	let mountTargetPath = $state('');
@@ -34,13 +33,6 @@
 
 	onMount(() => {
 		loadInstance();
-		refreshInterval = setInterval(loadInstance, 10000);
-	});
-
-	onDestroy(() => {
-		if (refreshInterval) {
-			clearInterval(refreshInterval);
-		}
 	});
 
 	async function handleStart() {
@@ -157,6 +149,7 @@
 			{/if}
 		</div>
 		<div class="flex gap-2">
+			<Button variant="secondary" onclick={loadInstance}>Refresh</Button>
 			{#if instance}
 				<a href="/instances/{name}/snapshots">
 					<Button variant="secondary">Snapshots</Button>
