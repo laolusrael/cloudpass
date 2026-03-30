@@ -552,31 +552,38 @@ func (c *multipassClient) ListSnapshots(instanceName string) ([]models.Snapshot,
 		return nil, fmt.Errorf("failed to get instance info: %w", err)
 	}
 
-	var info struct {
-		Info []struct {
-			Snapshots []struct {
-				Name       string `json:"name"`
-				Created    string `json:"created"`
-				Comment    string `json:"comment"`
-				Parent     string `json:"parent"`
-				Children   int    `json:"children"`
-				StateSize  int64  `json:"state_size"`
-				DiskSize   int64  `json:"disk_size"`
-				MemorySize int64  `json:"memory_size"`
-			} `json:"snapshots"`
-		} `json:"info"`
+	var raw struct {
+		Info map[string]json.RawMessage `json:"info"`
 	}
 
-	if err := json.Unmarshal(output, &info); err != nil {
+	if err := json.Unmarshal(output, &raw); err != nil {
 		return nil, fmt.Errorf("failed to parse info output: %w", err)
 	}
 
-	if len(info.Info) == 0 {
+	instanceData, ok := raw.Info[instanceName]
+	if !ok {
 		return nil, fmt.Errorf("instance %q not found", instanceName)
 	}
 
-	snapshots := make([]models.Snapshot, 0, len(info.Info[0].Snapshots))
-	for _, s := range info.Info[0].Snapshots {
+	var instanceInfo struct {
+		Snapshots []struct {
+			Name       string `json:"name"`
+			Created    string `json:"created"`
+			Comment    string `json:"comment"`
+			Parent     string `json:"parent"`
+			Children   int    `json:"children"`
+			StateSize  int64  `json:"state_size"`
+			DiskSize   int64  `json:"disk_size"`
+			MemorySize int64  `json:"memory_size"`
+		} `json:"snapshots"`
+	}
+
+	if err := json.Unmarshal(instanceData, &instanceInfo); err != nil {
+		return nil, fmt.Errorf("failed to parse instance data: %w", err)
+	}
+
+	snapshots := make([]models.Snapshot, 0, len(instanceInfo.Snapshots))
+	for _, s := range instanceInfo.Snapshots {
 		snapshots = append(snapshots, models.Snapshot{
 			Name:       s.Name,
 			Instance:   instanceName,
