@@ -585,57 +585,43 @@ func (c *multipassClient) ListSnapshots(instanceName string) ([]models.Snapshot,
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	cmd := exec.CommandContext(ctx, "multipass", "info", instanceName, "--format", "json")
+	cmd := exec.CommandContext(ctx, "multipass", "list", "--snapshots", "--format", "json")
 	output, err := cmd.Output()
 	if err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
 			return nil, fmt.Errorf("instance %q not found", instanceName)
 		}
-		return nil, fmt.Errorf("failed to get instance info: %w", err)
+		return nil, fmt.Errorf("failed to get snapshot list: %w", err)
 	}
 
-	var raw struct {
-		Info map[string]json.RawMessage `json:"info"`
+	var result struct {
+		Errors []string `json:"errors"`
+		Info   map[string]map[string]struct {
+			Comment string `json:"comment"`
+			Parent  string `json:"parent"`
+		} `json:"info"`
 	}
 
-	if err := json.Unmarshal(output, &raw); err != nil {
-		return nil, fmt.Errorf("failed to parse info output: %w", err)
+	if err := json.Unmarshal(output, &result); err != nil {
+		return nil, fmt.Errorf("failed to parse snapshot list output: %w", err)
 	}
 
-	instanceData, ok := raw.Info[instanceName]
+	if len(result.Errors) > 0 {
+		return nil, fmt.Errorf("multipass error: %s", result.Errors[0])
+	}
+
+	instanceSnapshots, ok := result.Info[instanceName]
 	if !ok {
-		return nil, fmt.Errorf("instance %q not found", instanceName)
+		return []models.Snapshot{}, nil
 	}
 
-	var instanceInfo struct {
-		Snapshots []struct {
-			Name       string `json:"name"`
-			Created    string `json:"created"`
-			Comment    string `json:"comment"`
-			Parent     string `json:"parent"`
-			Children   int    `json:"children"`
-			StateSize  int64  `json:"state_size"`
-			DiskSize   int64  `json:"disk_size"`
-			MemorySize int64  `json:"memory_size"`
-		} `json:"snapshots"`
-	}
-
-	if err := json.Unmarshal(instanceData, &instanceInfo); err != nil {
-		return nil, fmt.Errorf("failed to parse instance data: %w", err)
-	}
-
-	snapshots := make([]models.Snapshot, 0, len(instanceInfo.Snapshots))
-	for _, s := range instanceInfo.Snapshots {
+	snapshots := make([]models.Snapshot, 0, len(instanceSnapshots))
+	for name, snap := range instanceSnapshots {
 		snapshots = append(snapshots, models.Snapshot{
-			Name:       s.Name,
-			Instance:   instanceName,
-			CreatedAt:  s.Created,
-			Comment:    s.Comment,
-			Parent:     s.Parent,
-			Children:   s.Children,
-			StateSize:  s.StateSize,
-			DiskSize:   s.DiskSize,
-			MemorySize: s.MemorySize,
+			Name:     name,
+			Instance: instanceName,
+			Comment:  snap.Comment,
+			Parent:   snap.Parent,
 		})
 	}
 
