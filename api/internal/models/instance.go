@@ -64,10 +64,12 @@ type ErrorResponse struct {
 }
 
 type Image struct {
-	Alias   string `json:"alias"`
-	Version string `json:"version"`
-	Release string `json:"release"`
-	Remote  string `json:"remote"`
+	Alias   string   `json:"alias"`
+	Version string   `json:"version"`
+	Release string   `json:"release"`
+	Remote  string   `json:"remote"`
+	OS      string   `json:"os"`
+	Aliases []string `json:"aliases"`
 }
 
 type ImageList struct {
