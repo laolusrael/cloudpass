@@ -36,65 +36,6 @@ function createJobsStore() {
 		}
 	}
 
-	function startSSE() {
-		if (typeof window === 'undefined') return;
-
-		const apiUrl = import.meta.env.VITE_API_URL || '';
-		const sseUrl = `${apiUrl}/api/v1/jobs/stream`;
-
-		try {
-			eventSource = new EventSource(sseUrl);
-
-			eventSource.onopen = () => {
-				console.log('SSE connected');
-			};
-
-			eventSource.onmessage = async (event) => {
-				try {
-					const data: JobEvent = JSON.parse(event.data);
-					if (data.job) {
-						if (data.job.status === 'completed' || data.job.status === 'failed') {
-							update((jobs) => jobs.filter((j) => j.id !== data.job.id));
-							await instances.refresh();
-							notifications.show(
-								data.job.status === 'completed'
-									? `Instance "${data.job.instanceName}" is ready`
-									: `Instance "${data.job.instanceName}" failed: ${data.job.error || 'Unknown error'}`,
-								data.job.status === 'completed' ? 'success' : 'error'
-							);
-						} else if (data.job.status === 'running' || data.job.status === 'pending') {
-							update((jobs) => {
-								const existing = jobs.find((j) => j.id === data.job.id);
-								if (existing) {
-									return jobs.map((j) => (j.id === data.job.id ? data.job : j));
-								}
-								return [...jobs, data.job];
-							});
-						}
-					}
-				} catch (e) {
-					console.error('Failed to parse SSE message:', e);
-				}
-			};
-
-			eventSource.onerror = () => {
-				console.warn('SSE connection error, falling back to polling');
-				stopSSE();
-				startPolling();
-			};
-		} catch (e) {
-			console.error('Failed to start SSE:', e);
-			startPolling();
-		}
-	}
-
-	function stopSSE() {
-		if (eventSource) {
-			eventSource.close();
-			eventSource = null;
-		}
-	}
-
 	return {
 		subscribe,
 		loading: { subscribe: loading.subscribe },
@@ -122,11 +63,63 @@ function createJobsStore() {
 
 		startSSE() {
 			stopPolling();
-			startSSE();
+
+			if (typeof window === 'undefined') return;
+
+			const apiUrl = import.meta.env.VITE_API_URL || '';
+			const sseUrl = `${apiUrl}/api/v1/jobs/stream`;
+
+			try {
+				eventSource = new EventSource(sseUrl);
+
+				eventSource.onopen = () => {
+					console.log('SSE connected');
+				};
+
+				eventSource.onmessage = async (event) => {
+					try {
+						const data: JobEvent = JSON.parse(event.data);
+						if (data.job) {
+							if (data.job.status === 'completed' || data.job.status === 'failed') {
+								update((jobs) => jobs.filter((j) => j.id !== data.job.id));
+								await instances.refresh();
+								notifications.show(
+									data.job.status === 'completed'
+										? `Instance "${data.job.instanceName}" is ready`
+										: `Instance "${data.job.instanceName}" failed: ${data.job.error || 'Unknown error'}`,
+									data.job.status === 'completed' ? 'success' : 'error'
+								);
+							} else if (data.job.status === 'running' || data.job.status === 'pending') {
+								update((jobs) => {
+									const existing = jobs.find((j) => j.id === data.job.id);
+									if (existing) {
+										return jobs.map((j) => (j.id === data.job.id ? data.job : j));
+									}
+									return [...jobs, data.job];
+								});
+							}
+						}
+					} catch (e) {
+						console.error('Failed to parse SSE message:', e);
+					}
+				};
+
+				eventSource.onerror = () => {
+					console.warn('SSE connection error, falling back to polling');
+					this.stopSSE();
+					this.startPolling();
+				};
+			} catch (e) {
+				console.error('Failed to start SSE:', e);
+				this.startPolling();
+			}
 		},
 
 		stopSSE() {
-			stopSSE();
+			if (eventSource) {
+				eventSource.close();
+				eventSource = null;
+			}
 		},
 
 		remove(jobId: string) {
