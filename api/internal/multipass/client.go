@@ -492,8 +492,44 @@ func (c *multipassClient) PurgeDeleted() error {
 }
 
 func (c *multipassClient) CreateSnapshot(instanceName string, snapshotName string, comment string) error {
-	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout*2)
 	defer cancel()
+
+	instance, err := c.GetInstance(instanceName)
+	if err != nil {
+		return fmt.Errorf("failed to get instance: %w", err)
+	}
+
+	wasRunning := instance.State == "Running"
+
+	if wasRunning {
+		logger.Multipass.Info().Str("instance", instanceName).Msg("stopping instance for snapshot")
+		stopCtx, stopCancel := context.WithTimeout(context.Background(), c.timeout)
+		defer stopCancel()
+
+		cmd := exec.CommandContext(stopCtx, "multipass", "stop", instanceName)
+		_, err = cmd.Output()
+		if err != nil {
+			logger.Multipass.Error().Err(err).Str("instance", instanceName).Msg("failed to stop instance for snapshot")
+			return fmt.Errorf("failed to stop instance: %w", err)
+		}
+
+		for i := 0; i < 10; i++ {
+			time.Sleep(500 * time.Millisecond)
+			instance, err = c.GetInstance(instanceName)
+			if err != nil {
+				return fmt.Errorf("failed to get instance state: %w", err)
+			}
+			if instance.State == "Stopped" {
+				break
+			}
+		}
+
+		if instance.State != "Stopped" {
+			return fmt.Errorf("instance did not stop in time, current state: %s", instance.State)
+		}
+		logger.Multipass.Info().Str("instance", instanceName).Msg("instance stopped, creating snapshot")
+	}
 
 	args := []string{"snapshot", instanceName}
 	if snapshotName != "" {
@@ -508,11 +544,17 @@ func (c *multipassClient) CreateSnapshot(instanceName string, snapshotName strin
 		return fmt.Errorf("failed to create snapshot: %w", err)
 	}
 
-	if comment != "" && strings.Contains(string(output), "comment") {
-		ctx2, cancel2 := context.WithTimeout(context.Background(), c.timeout)
-		defer cancel2()
-		exec.CommandContext(ctx2, "multipass", "set", fmt.Sprintf("local.%s.%s.comment", instanceName, snapshotName), comment).Output()
+	if comment != "" {
+		setCtx, setCancel := context.WithTimeout(context.Background(), c.timeout)
+		defer setCancel()
+		setCmd := exec.CommandContext(setCtx, "multipass", "set", fmt.Sprintf("local.%s.%s.comment", instanceName, snapshotName), comment)
+		_, setErr := setCmd.Output()
+		if setErr != nil {
+			logger.Multipass.Warn().Err(setErr).Str("instance", instanceName).Str("snapshot", snapshotName).Msg("failed to set snapshot comment")
+		}
 	}
+
+	_ = output
 
 	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("snapshot created")
 	return nil
