@@ -8,16 +8,15 @@ import (
 	"encoding/hex"
 	"net/http"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
 )
 
 type JobHandler struct {
-	jobs     map[string]*models.Job
-	mu       sync.RWMutex
+	storage  *JobStorage
 	mpClient multipass.Client
+	timeout  time.Duration
 }
 
 func generateJobID() string {
@@ -26,10 +25,11 @@ func generateJobID() string {
 	return hex.EncodeToString(bytes)
 }
 
-func NewJobHandler(mpClient multipass.Client) *JobHandler {
+func NewJobHandler(mpClient multipass.Client, timeoutSec int, storage *JobStorage) *JobHandler {
 	return &JobHandler{
-		jobs:     make(map[string]*models.Job),
+		storage:  storage,
 		mpClient: mpClient,
+		timeout:  time.Duration(timeoutSec) * time.Second,
 	}
 }
 
@@ -42,9 +42,7 @@ func (h *JobHandler) Get(c echo.Context) error {
 		})
 	}
 
-	h.mu.RLock()
-	job, ok := h.jobs[id]
-	h.mu.RUnlock()
+	job, ok := h.storage.Get(id)
 
 	if !ok {
 		return c.JSON(http.StatusNotFound, models.ErrorResponse{
@@ -54,6 +52,12 @@ func (h *JobHandler) Get(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, models.JobResponse{Job: job})
+}
+
+func (h *JobHandler) List(c echo.Context) error {
+	jobs := h.storage.List()
+
+	return c.JSON(http.StatusOK, models.JobListResponse{Jobs: jobs})
 }
 
 func (h *JobHandler) CreateInstanceAsync(c echo.Context) error {
@@ -91,9 +95,7 @@ func (h *JobHandler) CreateInstanceAsync(c echo.Context) error {
 		UpdatedAt:    time.Now(),
 	}
 
-	h.mu.Lock()
-	h.jobs[jobID] = job
-	h.mu.Unlock()
+	h.storage.Set(job)
 
 	go h.runInstanceCreation(jobID, req, instanceName)
 
@@ -103,17 +105,15 @@ func (h *JobHandler) CreateInstanceAsync(c echo.Context) error {
 }
 
 func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstanceRequest, instanceName string) {
-	h.mu.Lock()
-	job := h.jobs[jobID]
-	h.mu.Unlock()
-
-	if job == nil {
+	job, ok := h.storage.Get(jobID)
+	if !ok {
 		logger.API.Error().Str("job_id", jobID).Msg("job not found")
 		return
 	}
 
 	job.Status = models.JobStatusRunning
 	job.UpdatedAt = time.Now()
+	h.storage.Set(job)
 	logger.API.Info().Str("job_id", jobID).Msg("job status: running")
 
 	opts := models.CreateInstanceRequest{
@@ -126,16 +126,27 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 		Image:     req.Image,
 	}
 
-	instance, err := h.mpClient.CreateInstance(opts)
+	if err := h.mpClient.LaunchInstanceBackground(opts); err != nil {
+		job, _ := h.storage.Get(jobID)
+		if job != nil {
+			job.Status = models.JobStatusFailed
+			job.Error = err.Error()
+			job.UpdatedAt = time.Now()
+			h.storage.Set(job)
+		}
+		logger.API.Error().Err(err).Str("job_id", jobID).Str("instance", instanceName).Msg("failed to start instance creation")
+		return
+	}
 
-	h.mu.Lock()
-	job = h.jobs[jobID]
-	h.mu.Unlock()
+	instance, err := h.mpClient.WaitForInstance(instanceName, h.timeout)
+
+	job, _ = h.storage.Get(jobID)
 
 	if err != nil {
 		job.Status = models.JobStatusFailed
 		job.Error = err.Error()
 		job.UpdatedAt = time.Now()
+		h.storage.Set(job)
 		logger.API.Error().Err(err).Str("job_id", jobID).Str("instance", instanceName).Msg("instance creation failed")
 		return
 	}
@@ -143,5 +154,6 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 	job.Status = models.JobStatusCompleted
 	job.InstanceName = instance.Name
 	job.UpdatedAt = time.Now()
+	h.storage.Set(job)
 	logger.API.Info().Str("job_id", jobID).Str("instance", instance.Name).Msg("instance creation completed")
 }

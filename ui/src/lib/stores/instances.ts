@@ -2,6 +2,15 @@ import { writable, derived } from 'svelte/store';
 import type { Instance } from '$lib/types';
 import { api } from '$lib/services/api';
 
+const STORED_NOTIFICATION_KEY = 'cloudpass_pending_notifications';
+
+export interface StoredNotification {
+	instanceName: string;
+	status: 'completed' | 'failed';
+	message: string;
+	timestamp: number;
+}
+
 function createInstancesStore() {
 	const { subscribe, set, update } = writable<Instance[]>([]);
 	const loading = writable(false);
@@ -40,46 +49,63 @@ function createInstancesStore() {
 			}
 		},
 
-		async createAsync(
-			request: Parameters<typeof api.createInstance>[0],
-			onProgress?: (status: string) => void
-		): Promise<Instance> {
-			loading.set(true);
-			error.set(null);
+	async createAsync(
+		request: Parameters<typeof api.createInstance>[0],
+		onProgress?: (status: string) => void
+	): Promise<Instance> {
+		loading.set(true);
+		error.set(null);
 
-			try {
-				const job = await api.createInstanceAsync(request);
+		try {
+			const job = await api.createInstanceAsync(request);
 
-				const pollJob = async (): Promise<Instance> => {
-					for (;;) {
-						await new Promise((resolve) => setTimeout(resolve, 2000));
+			const pollJob = async (): Promise<Instance> => {
+				for (;;) {
+					await new Promise((resolve) => setTimeout(resolve, 2000));
 
-						const updatedJob = await api.getJob(job.id);
+					const updatedJob = await api.getJob(job.id);
 
-						if (onProgress) {
-							onProgress(updatedJob.status);
-						}
-
-						if (updatedJob.status === 'completed') {
-							const instance = await api.getInstance(updatedJob.instance_name!);
-							update((instances) => [...instances, instance]);
-							return instance;
-						}
-
-						if (updatedJob.status === 'failed') {
-							throw new Error(updatedJob.error || 'Instance creation failed');
-						}
+					if (onProgress) {
+						onProgress(updatedJob.status);
 					}
-				};
 
-				return await pollJob();
-			} catch (e) {
-				error.set(e instanceof Error ? e.message : 'Failed to create instance');
-				throw e;
-			} finally {
-				loading.set(false);
-			}
-		},
+					if (updatedJob.status === 'completed') {
+						const instance = await api.getInstance(updatedJob.instance_name!);
+						update((instances) => [...instances, instance]);
+
+						const notification: StoredNotification = {
+							instanceName: instance.name,
+							status: 'completed',
+							message: `Instance "${instance.name}" created successfully`,
+							timestamp: Date.now()
+						};
+						savePendingNotification(notification);
+
+						return instance;
+					}
+
+					if (updatedJob.status === 'failed') {
+						const notification: StoredNotification = {
+							instanceName: request.name || 'unknown',
+							status: 'failed',
+							message: updatedJob.error || 'Instance creation failed',
+							timestamp: Date.now()
+						};
+						savePendingNotification(notification);
+
+						throw new Error(updatedJob.error || 'Instance creation failed');
+					}
+				}
+			};
+
+			return await pollJob();
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to create instance');
+			throw e;
+		} finally {
+			loading.set(false);
+		}
+	},
 
 		async delete(name: string) {
 			loading.set(true);
@@ -110,6 +136,40 @@ function createInstancesStore() {
 			await this.refresh();
 		}
 	};
+}
+
+function savePendingNotification(notification: StoredNotification) {
+	try {
+		const existing = getStoredNotifications();
+		existing.push(notification);
+		localStorage.setItem(STORED_NOTIFICATION_KEY, JSON.stringify(existing));
+	} catch (e) {
+		console.error('Failed to save notification:', e);
+	}
+}
+
+function getStoredNotifications(): StoredNotification[] {
+	try {
+		const stored = localStorage.getItem(STORED_NOTIFICATION_KEY);
+		return stored ? JSON.parse(stored) : [];
+	} catch {
+		return [];
+	}
+}
+
+export function clearStoredNotification(timestamp: number) {
+	try {
+		const existing = getStoredNotifications().filter((n) => n.timestamp !== timestamp);
+		localStorage.setItem(STORED_NOTIFICATION_KEY, JSON.stringify(existing));
+	} catch (e) {
+		console.error('Failed to clear notification:', e);
+	}
+}
+
+export function getAndClearStoredNotifications(): StoredNotification[] {
+	const notifications = getStoredNotifications();
+	localStorage.removeItem(STORED_NOTIFICATION_KEY);
+	return notifications;
 }
 
 export const instances = createInstancesStore();

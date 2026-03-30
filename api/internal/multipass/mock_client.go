@@ -2,6 +2,7 @@ package multipass
 
 import (
 	"fmt"
+	"time"
 
 	"cloudpass/internal/models"
 )
@@ -65,6 +66,21 @@ func (m *MockClient) CreateInstance(opts models.CreateInstanceRequest) (*models.
 	inst := models.Instance{Name: opts.Name}
 	m.instances = append(m.instances, inst)
 	return &inst, nil
+}
+
+func (m *MockClient) LaunchInstanceBackground(opts models.CreateInstanceRequest) error {
+	inst := models.Instance{Name: opts.Name, State: "Running"}
+	m.instances = append(m.instances, inst)
+	return nil
+}
+
+func (m *MockClient) WaitForInstance(name string, timeout time.Duration) (*models.Instance, error) {
+	for _, inst := range m.instances {
+		if inst.Name == name {
+			return &inst, nil
+		}
+	}
+	return nil, fmt.Errorf("instance %q not found", name)
 }
 
 func (m *MockClient) StartInstance(name string) error {

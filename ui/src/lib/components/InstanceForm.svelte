@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import type { CreateInstanceRequest, Image } from '$lib/types';
+	import type { CreateInstanceRequest, Image, Network } from '$lib/types';
 	import { images } from '$lib/stores/images';
+	import { networks } from '$lib/stores/networks';
 	import Input from './Input.svelte';
 	import Select from './Select.svelte';
 	import Button from './Button.svelte';
@@ -19,6 +20,7 @@
 	let cpus = $state(1);
 	let memory = $state('1G');
 	let disk = $state('5G');
+	let network = $state('');
 
 	const imageOptions = $derived(
 		$images.map((img: Image) => ({
@@ -27,8 +29,16 @@
 		}))
 	);
 
+	const networkOptions = $derived(
+		$networks.map((net: Network) => ({
+			value: net.name,
+			label: net.description ? `${net.name} (${net.description})` : net.name
+		}))
+	);
+
 	onMount(() => {
 		images.load();
+		networks.refresh();
 	});
 
 	function handleSubmit(e: Event) {
@@ -38,7 +48,8 @@
 			image: image || undefined,
 			cpus: cpus || undefined,
 			memory: memory || undefined,
-			disk: disk || undefined
+			disk: disk || undefined,
+			network: network || undefined
 		});
 	}
 </script>
@@ -61,6 +72,14 @@
 
 		<Input label="Disk" placeholder="5G" bind:value={disk} />
 	</div>
+
+	<Select
+		label="Network (Optional)"
+		options={networkOptions}
+		bind:value={network}
+		placeholder="Select a network (default: NAT)"
+		searchable={true}
+	/>
 
 	<div class="flex justify-end gap-3 pt-4">
 		<Button variant="secondary" type="button" onclick={onCancel}>
