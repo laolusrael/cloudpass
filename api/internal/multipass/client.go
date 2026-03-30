@@ -185,7 +185,13 @@ func (c *multipassClient) CreateInstance(opts models.CreateInstanceRequest) (*mo
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	args := []string{"launch", "--timeout", fmt.Sprintf("%d", int(c.timeout.Seconds()))}
+	args := []string{"launch"}
+
+	if opts.Image != "" {
+		args = append(args, opts.Image)
+	}
+
+	args = append(args, "--timeout", fmt.Sprintf("%d", int(c.timeout.Seconds())))
 
 	if opts.Name != "" {
 		args = append(args, "--name", opts.Name)
@@ -205,8 +211,8 @@ func (c *multipassClient) CreateInstance(opts models.CreateInstanceRequest) (*mo
 	if opts.CloudInit != "" {
 		args = append(args, "--cloud-init", "-")
 	}
+
 	if opts.Image != "" {
-		args = append(args, opts.Image)
 		logger.Multipass.Info().Str("image", opts.Image).Msg("starting instance creation with image")
 	} else {
 		logger.Multipass.Info().Msg("starting instance creation with default image")
