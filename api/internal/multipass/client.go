@@ -32,7 +32,7 @@ type Client interface {
 	DeleteNetwork(name string) error
 	MountInstance(instanceName string, sourcePath string, targetPath string) error
 	UnmountInstance(instanceName string, targetPath string) error
-	CreateSnapshot(instanceName string, snapshotName string, comment string) error
+	CreateSnapshot(instanceName string, snapshotName string, comment string) (string, bool, error)
 	RestoreSnapshot(instanceName string, snapshotName string) error
 	ListSnapshots(instanceName string) ([]models.Snapshot, error)
 	DeleteSnapshot(instanceName string, snapshotName string) error
@@ -514,47 +514,72 @@ func (c *multipassClient) PurgeDeleted() error {
 	return nil
 }
 
-func (c *multipassClient) CreateSnapshot(instanceName string, snapshotName string, comment string) error {
+func (c *multipassClient) CreateSnapshot(instanceName string, snapshotName string, comment string) (string, bool, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	args := []string{"snapshot", instanceName}
-	if snapshotName != "" {
-		args = append(args, snapshotName)
+	instance, err := c.GetInstance(instanceName)
+	if err != nil {
+		return "", false, err
 	}
+
+	wasRunning := instance.State == "Running"
+
+	if wasRunning {
+		logger.Multipass.Info().Str("instance", instanceName).Msg("stopping instance for snapshot")
+		if err := c.StopInstance(instanceName); err != nil {
+			return "", false, fmt.Errorf("failed to stop instance for snapshot: %w", err)
+		}
+		time.Sleep(2 * time.Second)
+	}
+
+	args := []string{"snapshot"}
+	if snapshotName != "" {
+		args = append(args, "--name", snapshotName)
+	}
+	if comment != "" {
+		args = append(args, "--comment", comment)
+	}
+	args = append(args, instanceName)
 
 	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("creating snapshot")
 	cmd := exec.CommandContext(ctx, "multipass", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("instance", instanceName).Msg("failed to create snapshot")
-		return fmt.Errorf("failed to create snapshot: %w", err)
+		logger.Multipass.Error().
+			Str("instance", instanceName).
+			Str("output", string(output)).
+			Msg("failed to create snapshot")
+		return "", false, fmt.Errorf("failed to create snapshot: %w", err)
 	}
 
-	if comment != "" && strings.Contains(string(output), "comment") {
-		ctx2, cancel2 := context.WithTimeout(context.Background(), c.timeout)
-		defer cancel2()
-		exec.CommandContext(ctx2, "multipass", "set", fmt.Sprintf("local.%s.%s.comment", instanceName, snapshotName), comment).Output()
+	createdName := snapshotName
+	if createdName == "" {
+		createdName = "snapshot0"
 	}
 
-	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("snapshot created")
-	return nil
+	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", createdName).Msg("snapshot created")
+	return createdName, wasRunning, nil
 }
 
 func (c *multipassClient) RestoreSnapshot(instanceName string, snapshotName string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout*2)
 	defer cancel()
 
-	args := []string{"restore", instanceName}
+	args := []string{"restore"}
 	if snapshotName != "" {
-		args = append(args, snapshotName)
+		args = append(args, "--name", snapshotName)
 	}
+	args = append(args, instanceName)
 
 	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("restoring snapshot")
 	cmd := exec.CommandContext(ctx, "multipass", args...)
-	_, err := cmd.Output()
+	output, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("instance", instanceName).Msg("failed to restore snapshot")
+		logger.Multipass.Error().
+			Str("instance", instanceName).
+			Str("output", string(output)).
+			Msg("failed to restore snapshot")
 		return fmt.Errorf("failed to restore snapshot: %w", err)
 	}
 
@@ -628,10 +653,13 @@ func (c *multipassClient) DeleteSnapshot(instanceName string, snapshotName strin
 	defer cancel()
 
 	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("deleting snapshot")
-	cmd := exec.CommandContext(ctx, "multipass", "delete", instanceName, "-p")
-	_, err := cmd.Output()
+	cmd := exec.CommandContext(ctx, "multipass", "delete", instanceName, "--snapshot", snapshotName)
+	output, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("instance", instanceName).Msg("failed to delete snapshot")
+		logger.Multipass.Error().
+			Str("instance", instanceName).
+			Str("output", string(output)).
+			Msg("failed to delete snapshot")
 		return fmt.Errorf("failed to delete snapshot: %w", err)
 	}
 

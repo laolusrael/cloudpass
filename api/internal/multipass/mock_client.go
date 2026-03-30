@@ -174,8 +174,8 @@ func (m *MockClient) PurgeDeleted() error {
 	return nil
 }
 
-func (m *MockClient) CreateSnapshot(instanceName string, snapshotName string, comment string) error {
-	return nil
+func (m *MockClient) CreateSnapshot(instanceName string, snapshotName string, comment string) (string, bool, error) {
+	return snapshotName, false, nil
 }
 
 func (m *MockClient) RestoreSnapshot(instanceName string, snapshotName string) error {
