@@ -40,6 +40,47 @@ function createInstancesStore() {
 			}
 		},
 
+		async createAsync(
+			request: Parameters<typeof api.createInstance>[0],
+			onProgress?: (status: string) => void
+		): Promise<Instance> {
+			loading.set(true);
+			error.set(null);
+
+			try {
+				const job = await api.createInstanceAsync(request);
+
+				const pollJob = async (): Promise<Instance> => {
+					for (;;) {
+						await new Promise((resolve) => setTimeout(resolve, 2000));
+
+						const updatedJob = await api.getJob(job.id);
+
+						if (onProgress) {
+							onProgress(updatedJob.status);
+						}
+
+						if (updatedJob.status === 'completed') {
+							const instance = await api.getInstance(updatedJob.instance_name!);
+							update((instances) => [...instances, instance]);
+							return instance;
+						}
+
+						if (updatedJob.status === 'failed') {
+							throw new Error(updatedJob.error || 'Instance creation failed');
+						}
+					}
+				};
+
+				return await pollJob();
+			} catch (e) {
+				error.set(e instanceof Error ? e.message : 'Failed to create instance');
+				throw e;
+			} finally {
+				loading.set(false);
+			}
+		},
+
 		async delete(name: string) {
 			loading.set(true);
 			error.set(null);

@@ -71,6 +71,20 @@ export interface InstanceResponse {
 	message: string;
 }
 
+export interface Job {
+	id: string;
+	type: string;
+	status: 'pending' | 'running' | 'completed' | 'failed';
+	instance_name?: string;
+	error?: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface JobResponse {
+	job: Job;
+}
+
 export interface ErrorResponse {
 	error: string;
 	message: string;

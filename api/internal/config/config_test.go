@@ -70,7 +70,7 @@ func TestLoad_EmptyConfig(t *testing.T) {
 	assert.Empty(t, cfg.Security.AllowedIPs)
 	assert.Equal(t, 30, cfg.Security.WebsocketTimeoutMin)
 	assert.Equal(t, DetectSocketPath(), cfg.Multipass.SocketPath)
-	assert.Equal(t, 300, cfg.Multipass.DefaultTimeoutSec)
+	assert.Equal(t, 1800, cfg.Multipass.DefaultTimeoutSec)
 	assert.Equal(t, "info", cfg.Logging.Level)
 	assert.Equal(t, "console", cfg.Logging.Format)
 }
