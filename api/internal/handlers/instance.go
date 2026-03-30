@@ -507,7 +507,7 @@ func (h *InstanceHandler) CreateSnapshot(c echo.Context) error {
 		req = models.CreateSnapshotRequest{}
 	}
 
-	snapshotName, wasStopped, err := h.client.CreateSnapshot(name, req.Name, req.Comment)
+	err := h.client.CreateSnapshot(name, req.Name, req.Comment)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
@@ -523,12 +523,9 @@ func (h *InstanceHandler) CreateSnapshot(c echo.Context) error {
 		})
 	}
 
-	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("snapshot", snapshotName).Msg("snapshot created")
-	return c.JSON(http.StatusCreated, models.SnapshotResponse{
-		Message:         "Snapshot created successfully",
-		SnapshotName:    snapshotName,
-		InstanceName:    name,
-		InstanceStopped: wasStopped,
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("snapshot", req.Name).Msg("snapshot created")
+	return c.JSON(http.StatusCreated, models.InstanceResponse{
+		Message: "Snapshot created successfully",
 	})
 }
 
