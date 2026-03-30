@@ -76,7 +76,7 @@ var defaultConfig = Config{
 	},
 	Multipass: MultipassConfig{
 		SocketPath:        "",
-		DefaultTimeoutSec: 300,
+		DefaultTimeoutSec: 1800,
 	},
 	Logging: LoggingConfig{
 		Level:  "info",

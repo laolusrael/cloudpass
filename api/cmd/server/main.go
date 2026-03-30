@@ -79,6 +79,7 @@ func main() {
 	healthHandler := handlers.NewHealthHandler()
 	configHandler := handlers.NewConfigHandler(configPath)
 	terminalHandler := websocket.NewTerminalHandler(mpClient)
+	jobHandler := handlers.NewJobHandler(mpClient)
 
 	e := echo.New()
 	e.HideBanner = true
@@ -96,6 +97,7 @@ func main() {
 
 	api.GET("/instances", instanceHandler.List)
 	api.POST("/instances", instanceHandler.Create)
+	api.POST("/instances/async", jobHandler.CreateInstanceAsync)
 	api.POST("/instances/import", instanceHandler.Import)
 	api.GET("/instances/:name", instanceHandler.Get)
 	api.GET("/instances/:name/state", instanceHandler.GetState)
@@ -118,6 +120,7 @@ func main() {
 	api.GET("/networks", networkHandler.List)
 	api.POST("/networks", networkHandler.Create)
 	api.DELETE("/networks/:name", networkHandler.Delete)
+	api.GET("/jobs/:id", jobHandler.Get)
 	api.GET("/config", configHandler.Get)
 	api.POST("/config", configHandler.Update)
 

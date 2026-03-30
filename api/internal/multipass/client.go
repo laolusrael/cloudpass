@@ -185,7 +185,7 @@ func (c *multipassClient) CreateInstance(opts models.CreateInstanceRequest) (*mo
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	args := []string{"launch"}
+	args := []string{"launch", "--timeout", fmt.Sprintf("%d", int(c.timeout.Seconds()))}
 
 	if opts.Name != "" {
 		args = append(args, "-n", opts.Name)
@@ -207,9 +207,11 @@ func (c *multipassClient) CreateInstance(opts models.CreateInstanceRequest) (*mo
 	}
 	if opts.Image != "" {
 		args = append(args, opts.Image)
+		logger.Multipass.Info().Str("image", opts.Image).Msg("starting instance creation with image")
+	} else {
+		logger.Multipass.Info().Msg("starting instance creation with default image")
 	}
 
-	logger.Multipass.Info().Str("name", opts.Name).Msg("creating instance")
 	cmd := exec.CommandContext(ctx, "multipass", args...)
 	output, err := cmd.Output()
 	if err != nil {
@@ -217,16 +219,32 @@ func (c *multipassClient) CreateInstance(opts models.CreateInstanceRequest) (*mo
 		return nil, fmt.Errorf("failed to create instance: %w", err)
 	}
 
+	logger.Multipass.Info().Str("name", opts.Name).Msg("instance creation command completed, fetching instance info")
+
 	outputStr := string(output)
 	if strings.Contains(outputStr, "Launched:") {
 		parts := strings.Split(outputStr, ":")
 		if len(parts) >= 2 {
 			name := strings.TrimSpace(parts[1])
-			return c.GetInstance(name)
+			logger.Multipass.Info().Str("name", name).Msg("instance launched, retrieving details")
+			instance, err := c.GetInstance(name)
+			if err != nil {
+				logger.Multipass.Error().Err(err).Str("name", name).Msg("failed to get instance details after launch")
+				return nil, fmt.Errorf("failed to get instance: %w", err)
+			}
+			logger.Multipass.Info().Str("name", instance.Name).Str("state", instance.State).Msg("instance ready")
+			return instance, nil
 		}
 	}
 
-	return c.GetInstance(opts.Name)
+	logger.Multipass.Info().Str("name", opts.Name).Msg("retrieving instance info")
+	instance, err := c.GetInstance(opts.Name)
+	if err != nil {
+		logger.Multipass.Error().Err(err).Str("name", opts.Name).Msg("failed to get instance info")
+		return nil, fmt.Errorf("failed to get instance: %w", err)
+	}
+	logger.Multipass.Info().Str("name", instance.Name).Str("state", instance.State).Msg("instance ready")
+	return instance, nil
 }
 
 func (c *multipassClient) StartInstance(name string) error {
@@ -414,7 +432,7 @@ func (c *multipassClient) ListNetworks() ([]models.Network, error) {
 	}
 
 	var result struct {
-		Networks []models.Network `json:"networks"`
+		Networks []models.Network `json:"list"`
 	}
 	if err := json.Unmarshal(output, &result); err != nil {
 		logger.Multipass.Error().Err(err).Msg("failed to parse networks")

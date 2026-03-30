@@ -15,7 +15,9 @@ import type {
 	MountRequest,
 	MountResponse,
 	ConfigResponse,
-	ConfigUpdateRequest
+	ConfigUpdateRequest,
+	Job,
+	JobResponse
 } from '$lib/types';
 
 const API_BASE = '/api';
@@ -56,6 +58,19 @@ class ApiService {
 			method: 'POST',
 			body: JSON.stringify(request)
 		});
+	}
+
+	async createInstanceAsync(request: CreateInstanceRequest): Promise<Job> {
+		const data = await this.request<JobResponse>('/instances/async', {
+			method: 'POST',
+			body: JSON.stringify(request)
+		});
+		return data.job;
+	}
+
+	async getJob(id: string): Promise<Job> {
+		const data = await this.request<JobResponse>(`/jobs/${id}`);
+		return data.job;
 	}
 
 	async deleteInstance(name: string): Promise<InstanceResponse> {
