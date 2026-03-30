@@ -378,14 +378,16 @@ func (c *multipassClient) ListImages() ([]models.Image, error) {
 		return nil, fmt.Errorf("failed to list images: %w", err)
 	}
 
-	var images []models.Image
-	if err := json.Unmarshal(output, &images); err != nil {
+	var result struct {
+		Images []models.Image `json:"images"`
+	}
+	if err := json.Unmarshal(output, &result); err != nil {
 		logger.Multipass.Error().Err(err).Msg("failed to parse images")
 		return nil, fmt.Errorf("failed to parse images: %w", err)
 	}
 
-	logger.Multipass.Debug().Int("count", len(images)).Msg("listed images")
-	return images, nil
+	logger.Multipass.Debug().Int("count", len(result.Images)).Msg("listed images")
+	return result.Images, nil
 }
 
 func (c *multipassClient) ListNetworks() ([]models.Network, error) {
