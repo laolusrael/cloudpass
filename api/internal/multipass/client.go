@@ -432,7 +432,7 @@ func (c *multipassClient) ListNetworks() ([]models.Network, error) {
 	}
 
 	var result struct {
-		Networks []models.Network `json:"networks"`
+		Networks []models.Network `json:"list"`
 	}
 	if err := json.Unmarshal(output, &result); err != nil {
 		logger.Multipass.Error().Err(err).Msg("failed to parse networks")
