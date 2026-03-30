@@ -1,7 +1,9 @@
 <script lang="ts">
 	import '../app.css';
 	import type { Snippet } from 'svelte';
+	import { onMount } from 'svelte';
 	import { notifications } from '$lib/stores/notifications';
+	import { getAndClearStoredNotifications } from '$lib/stores/instances';
 	import Toast from '$lib/components/Toast.svelte';
 
 	interface Props {
@@ -9,6 +11,13 @@
 	}
 
 	let { children }: Props = $props();
+
+	onMount(() => {
+		const stored = getAndClearStoredNotifications();
+		for (const n of stored) {
+			notifications.show(n.message, n.status === 'completed' ? 'success' : 'error');
+		}
+	});
 </script>
 
 <div class="min-h-screen bg-gray-50">

@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -55,7 +56,12 @@ func main() {
 	}
 
 	if configPath == "" {
-		configPath = "./config.yaml"
+		homeDir, err := os.UserHomeDir()
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "failed to get home directory: %v\n", err)
+			os.Exit(1)
+		}
+		configPath = filepath.Join(homeDir, ".cloudpass", "config.yaml")
 	}
 
 	cfg, err := config.EnsureConfig(configPath, resetConfig)
@@ -73,13 +79,27 @@ func main() {
 
 	mpClient := multipass.NewClient(cfg.Multipass.DefaultTimeoutSec)
 
+	jobStorage, err := handlers.NewJobStorage(filepath.Join(filepath.Dir(configPath), "data"))
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize job storage")
+	}
+
 	instanceHandler := handlers.NewInstanceHandler(mpClient)
 	imageHandler := handlers.NewImageHandler(mpClient)
 	networkHandler := handlers.NewNetworkHandler(mpClient)
 	healthHandler := handlers.NewHealthHandler()
 	configHandler := handlers.NewConfigHandler(configPath)
 	terminalHandler := websocket.NewTerminalHandler(mpClient)
-	jobHandler := handlers.NewJobHandler(mpClient)
+	jobHandler := handlers.NewJobHandler(mpClient, cfg.Multipass.DefaultTimeoutSec, jobStorage)
+
+	jobStorage.Cleanup(24 * time.Hour)
+
+	go func() {
+		for {
+			jobStorage.Cleanup(24 * time.Hour)
+			time.Sleep(time.Hour)
+		}
+	}()
 
 	e := echo.New()
 	e.HideBanner = true
@@ -120,6 +140,7 @@ func main() {
 	api.GET("/networks", networkHandler.List)
 	api.POST("/networks", networkHandler.Create)
 	api.DELETE("/networks/:name", networkHandler.Delete)
+	api.GET("/jobs", jobHandler.List)
 	api.GET("/jobs/:id", jobHandler.Get)
 	api.GET("/config", configHandler.Get)
 	api.POST("/config", configHandler.Update)

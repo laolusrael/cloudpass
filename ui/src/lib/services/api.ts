@@ -17,7 +17,8 @@ import type {
 	ConfigResponse,
 	ConfigUpdateRequest,
 	Job,
-	JobResponse
+	JobResponse,
+	JobListResponse
 } from '$lib/types';
 
 const API_BASE = '/api';
@@ -71,6 +72,11 @@ class ApiService {
 	async getJob(id: string): Promise<Job> {
 		const data = await this.request<JobResponse>(`/jobs/${id}`);
 		return data.job;
+	}
+
+	async listJobs(): Promise<Job[]> {
+		const data = await this.request<JobListResponse>('/jobs');
+		return data.jobs;
 	}
 
 	async deleteInstance(name: string): Promise<InstanceResponse> {

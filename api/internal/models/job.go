@@ -29,3 +29,7 @@ type CreateJobRequest struct {
 type JobResponse struct {
 	Job *Job `json:"job"`
 }
+
+type JobListResponse struct {
+	Jobs []*Job `json:"jobs"`
+}

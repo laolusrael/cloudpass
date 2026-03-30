@@ -19,6 +19,8 @@ type Client interface {
 	GetInstance(name string) (*models.Instance, error)
 	GetInstanceIP(name string) (string, error)
 	CreateInstance(opts models.CreateInstanceRequest) (*models.Instance, error)
+	LaunchInstanceBackground(opts models.CreateInstanceRequest) error
+	WaitForInstance(name string, timeout time.Duration) (*models.Instance, error)
 	StartInstance(name string) error
 	StopInstance(name string) error
 	RestartInstance(name string) error
@@ -251,6 +253,89 @@ func (c *multipassClient) CreateInstance(opts models.CreateInstanceRequest) (*mo
 	}
 	logger.Multipass.Info().Str("name", instance.Name).Str("state", instance.State).Msg("instance ready")
 	return instance, nil
+}
+
+func (c *multipassClient) LaunchInstanceBackground(opts models.CreateInstanceRequest) error {
+	args := []string{"launch"}
+
+	if opts.Image != "" {
+		args = append(args, opts.Image)
+	}
+
+	args = append(args, "--timeout", fmt.Sprintf("%d", int(c.timeout.Seconds())))
+
+	if opts.Name != "" {
+		args = append(args, "--name", opts.Name)
+	}
+	if opts.CPUs > 0 {
+		args = append(args, "--cpus", fmt.Sprintf("%d", opts.CPUs))
+	}
+	if opts.Memory != "" {
+		args = append(args, "--memory", opts.Memory)
+	}
+	if opts.Disk != "" {
+		args = append(args, "--disk", opts.Disk)
+	}
+	if opts.Network != "" {
+		args = append(args, "--network", opts.Network)
+	}
+	if opts.CloudInit != "" {
+		args = append(args, "--cloud-init", "-")
+	}
+
+	if opts.Image != "" {
+		logger.Multipass.Info().Str("image", opts.Image).Str("name", opts.Name).Msg("starting instance creation in background")
+	} else {
+		logger.Multipass.Info().Str("name", opts.Name).Msg("starting instance creation in background with default image")
+	}
+
+	cmd := exec.Command("multipass", args...)
+	if err := cmd.Start(); err != nil {
+		logger.Multipass.Error().Err(err).Str("name", opts.Name).Msg("failed to start multipass launch")
+		return fmt.Errorf("failed to start instance creation: %w", err)
+	}
+
+	logger.Multipass.Info().Str("name", opts.Name).Msg("instance launch started in background")
+	return nil
+}
+
+func (c *multipassClient) WaitForInstance(name string, timeout time.Duration) (*models.Instance, error) {
+	ticker := time.NewTicker(5 * time.Second)
+	defer ticker.Stop()
+
+	timeoutChan := time.After(timeout)
+
+	logger.Multipass.Info().Str("name", name).Msg("waiting for instance to be created")
+
+	for {
+		select {
+		case <-timeoutChan:
+			logger.Multipass.Error().Str("name", name).Msg("instance creation timed out")
+			return nil, fmt.Errorf("instance creation timed out after %v", timeout)
+		case <-ticker.C:
+			instances, err := c.ListInstances()
+			if err != nil {
+				logger.Multipass.Warn().Err(err).Str("name", name).Msg("failed to list instances, retrying")
+				continue
+			}
+
+			for _, inst := range instances {
+				if inst.Name == name {
+					logger.Multipass.Info().Str("name", name).Str("state", inst.State).Msg("instance found")
+
+					instance, err := c.GetInstance(name)
+					if err != nil {
+						return nil, fmt.Errorf("failed to get instance details: %w", err)
+					}
+
+					logger.Multipass.Info().Str("name", name).Str("state", instance.State).Msg("instance ready")
+					return instance, nil
+				}
+			}
+
+			logger.Multipass.Debug().Str("name", name).Msg("instance not yet created, waiting...")
+		}
+	}
 }
 
 func (c *multipassClient) StartInstance(name string) error {

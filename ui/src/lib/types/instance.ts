@@ -87,6 +87,10 @@ export interface JobResponse {
 	job: Job;
 }
 
+export interface JobListResponse {
+	jobs: Job[];
+}
+
 export interface ErrorResponse {
 	error: string;
 	message: string;
