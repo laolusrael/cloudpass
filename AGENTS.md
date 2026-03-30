@@ -35,6 +35,7 @@ refactor/* ← Code refactoring
 2. Delete branch after merge
 3. Use strict prefixes: `feature/`, `fix/`, `docs/`, `refactor/`
 4. Never push directly to `main` or `develop`
+5. **Always check if PR is merged before pushing changes to an existing PR** - create a new branch/PR if the old one was already merged
 
 ### Process
 
