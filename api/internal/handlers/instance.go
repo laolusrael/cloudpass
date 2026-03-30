@@ -524,8 +524,10 @@ func (h *InstanceHandler) CreateSnapshot(c echo.Context) error {
 	}
 
 	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("snapshot", req.Name).Msg("snapshot created")
-	return c.JSON(http.StatusCreated, models.InstanceResponse{
-		Message: "Snapshot created successfully",
+	return c.JSON(http.StatusCreated, models.SnapshotResponse{
+		Message:      "Snapshot created successfully",
+		SnapshotName: req.Name,
+		InstanceName: name,
 	})
 }
 
