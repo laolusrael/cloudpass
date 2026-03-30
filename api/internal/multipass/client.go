@@ -188,16 +188,16 @@ func (c *multipassClient) CreateInstance(opts models.CreateInstanceRequest) (*mo
 	args := []string{"launch", "--timeout", fmt.Sprintf("%d", int(c.timeout.Seconds()))}
 
 	if opts.Name != "" {
-		args = append(args, "-n", opts.Name)
+		args = append(args, "--name", opts.Name)
 	}
 	if opts.CPUs > 0 {
-		args = append(args, "-c", fmt.Sprintf("%d", opts.CPUs))
+		args = append(args, "--cpus", fmt.Sprintf("%d", opts.CPUs))
 	}
 	if opts.Memory != "" {
-		args = append(args, "-m", opts.Memory)
+		args = append(args, "--memory", opts.Memory)
 	}
 	if opts.Disk != "" {
-		args = append(args, "-d", opts.Disk)
+		args = append(args, "--disk", opts.Disk)
 	}
 	if opts.Network != "" {
 		args = append(args, "--network", opts.Network)

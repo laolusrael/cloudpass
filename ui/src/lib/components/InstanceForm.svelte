@@ -23,7 +23,7 @@
 	const imageOptions = $derived(
 		$images.map((img: Image) => ({
 			value: img.alias || img.release,
-			label: img.release ? `${img.release} (${img.alias || img.version})` : img.alias
+			label: img.os ? `${img.os} ${img.release || img.alias} (${img.alias || img.version})` : (img.release ? `${img.release} (${img.alias || img.version})` : img.alias)
 		}))
 	);
 
