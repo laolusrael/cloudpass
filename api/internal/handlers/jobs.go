@@ -6,6 +6,7 @@ import (
 	"cloudpass/internal/multipass"
 	"crypto/rand"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"strings"
 	"time"
@@ -15,6 +16,7 @@ import (
 
 type JobHandler struct {
 	storage  *JobStorage
+	eventHub *EventHub
 	mpClient multipass.Client
 	timeout  time.Duration
 }
@@ -25,9 +27,10 @@ func generateJobID() string {
 	return hex.EncodeToString(bytes)
 }
 
-func NewJobHandler(mpClient multipass.Client, timeoutSec int, storage *JobStorage) *JobHandler {
+func NewJobHandler(mpClient multipass.Client, timeoutSec int, storage *JobStorage, eventHub *EventHub) *JobHandler {
 	return &JobHandler{
 		storage:  storage,
+		eventHub: eventHub,
 		mpClient: mpClient,
 		timeout:  time.Duration(timeoutSec) * time.Second,
 	}
@@ -58,6 +61,63 @@ func (h *JobHandler) List(c echo.Context) error {
 	jobs := h.storage.List()
 
 	return c.JSON(http.StatusOK, models.JobListResponse{Jobs: jobs})
+}
+
+func (h *JobHandler) Stream(c echo.Context) error {
+	c.Response().Header().Set("Content-Type", "text/event-stream")
+	c.Response().Header().Set("Cache-Control", "no-cache")
+	c.Response().Header().Set("Connection", "keep-alive")
+	c.Response().Header().Set("Access-Control-Allow-Origin", "*")
+	c.Response().Header().Set("X-Accel-Buffering", "no")
+
+	if flusher, ok := c.Response().Writer.(interface{ Flush() }); ok {
+		flusher.Flush()
+	}
+
+	ch := h.eventHub.Subscribe()
+	defer h.eventHub.Unsubscribe(ch)
+
+	jobs := h.storage.List()
+	for _, job := range jobs {
+		if job.Status == models.JobStatusPending || job.Status == models.JobStatusRunning {
+			event := JobEvent{
+				Type: "job.updated",
+				Job:  job,
+			}
+			data, err := json.Marshal(event)
+			if err == nil {
+				c.Response().Write([]byte("data: " + string(data) + "\n\n"))
+				if flusher, ok := c.Response().Writer.(interface{ Flush() }); ok {
+					flusher.Flush()
+				}
+			}
+		}
+	}
+
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case event := <-ch:
+			data, err := json.Marshal(event)
+			if err != nil {
+				logger.API.Error().Err(err).Msg("failed to marshal event")
+				continue
+			}
+			c.Response().Write([]byte("data: " + string(data) + "\n\n"))
+			if flusher, ok := c.Response().Writer.(interface{ Flush() }); ok {
+				flusher.Flush()
+			}
+		case <-ticker.C:
+			c.Response().Write([]byte(": heartbeat\n\n"))
+			if flusher, ok := c.Response().Writer.(interface{ Flush() }); ok {
+				flusher.Flush()
+			}
+		case <-c.Request().Context().Done():
+			return nil
+		}
+	}
 }
 
 func (h *JobHandler) CreateInstanceAsync(c echo.Context) error {
@@ -97,6 +157,10 @@ func (h *JobHandler) CreateInstanceAsync(c echo.Context) error {
 
 	h.storage.Set(job)
 
+	if h.eventHub != nil {
+		h.eventHub.BroadcastJobUpdate(job)
+	}
+
 	go h.runInstanceCreation(jobID, req, instanceName)
 
 	logger.API.Info().Str("job_id", jobID).Str("instance", instanceName).Msg("instance creation job started")
@@ -114,6 +178,9 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 	job.Status = models.JobStatusRunning
 	job.UpdatedAt = time.Now()
 	h.storage.Set(job)
+	if h.eventHub != nil {
+		h.eventHub.BroadcastJobUpdate(job)
+	}
 	logger.API.Info().Str("job_id", jobID).Msg("job status: running")
 
 	opts := models.CreateInstanceRequest{
@@ -133,6 +200,9 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 			job.Error = err.Error()
 			job.UpdatedAt = time.Now()
 			h.storage.Set(job)
+			if h.eventHub != nil {
+				h.eventHub.BroadcastJobUpdate(job)
+			}
 		}
 		logger.API.Error().Err(err).Str("job_id", jobID).Str("instance", instanceName).Msg("failed to start instance creation")
 		return
@@ -147,6 +217,9 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 		job.Error = err.Error()
 		job.UpdatedAt = time.Now()
 		h.storage.Set(job)
+		if h.eventHub != nil {
+			h.eventHub.BroadcastJobUpdate(job)
+		}
 		logger.API.Error().Err(err).Str("job_id", jobID).Str("instance", instanceName).Msg("instance creation failed")
 		return
 	}
@@ -155,5 +228,8 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 	job.InstanceName = instance.Name
 	job.UpdatedAt = time.Now()
 	h.storage.Set(job)
+	if h.eventHub != nil {
+		h.eventHub.BroadcastJobUpdate(job)
+	}
 	logger.API.Info().Str("job_id", jobID).Str("instance", instance.Name).Msg("instance creation completed")
 }

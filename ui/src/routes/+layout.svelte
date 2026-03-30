@@ -4,6 +4,7 @@
 	import { onMount } from 'svelte';
 	import { notifications } from '$lib/stores/notifications';
 	import { getAndClearStoredNotifications } from '$lib/stores/instances';
+	import { jobs } from '$lib/stores/jobs';
 	import Toast from '$lib/components/Toast.svelte';
 
 	interface Props {
@@ -17,6 +18,12 @@
 		for (const n of stored) {
 			notifications.show(n.message, n.status === 'completed' ? 'success' : 'error');
 		}
+
+		jobs.startSSE();
+
+		return () => {
+			jobs.stopSSE();
+		};
 	});
 </script>
 
