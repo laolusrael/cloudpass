@@ -46,6 +46,8 @@ export interface Image {
 	version: string;
 	release: string;
 	remote: string;
+	os: string;
+	aliases: string[];
 }
 
 export interface Network {
