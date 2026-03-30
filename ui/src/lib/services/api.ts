@@ -3,10 +3,12 @@ import type {
 	CreateInstanceRequest,
 	InstanceList,
 	InstanceResponse,
+	InstanceState,
 	ImageList,
 	NetworkList,
 	ErrorResponse,
 	SnapshotList,
+	SnapshotResponse,
 	CreateSnapshotRequest,
 	InstanceExport,
 	ImportInstanceRequest,
@@ -43,6 +45,10 @@ class ApiService {
 
 	async getInstance(name: string): Promise<Instance> {
 		return this.request<Instance>(`/instances/${encodeURIComponent(name)}`);
+	}
+
+	async getInstanceState(name: string): Promise<InstanceState> {
+		return this.request<InstanceState>(`/instances/${encodeURIComponent(name)}/state`);
 	}
 
 	async createInstance(request: CreateInstanceRequest): Promise<Instance> {
@@ -101,8 +107,8 @@ class ApiService {
 		return this.request<{ status: string }>('/health');
 	}
 
-	async createSnapshot(instanceName: string, request: CreateSnapshotRequest): Promise<InstanceResponse> {
-		return this.request<InstanceResponse>(`/instances/${encodeURIComponent(instanceName)}/snapshots`, {
+	async createSnapshot(instanceName: string, request: CreateSnapshotRequest): Promise<SnapshotResponse> {
+		return this.request<SnapshotResponse>(`/instances/${encodeURIComponent(instanceName)}/snapshots`, {
 			method: 'POST',
 			body: JSON.stringify(request)
 		});

@@ -98,6 +98,7 @@ func main() {
 	api.POST("/instances", instanceHandler.Create)
 	api.POST("/instances/import", instanceHandler.Import)
 	api.GET("/instances/:name", instanceHandler.Get)
+	api.GET("/instances/:name/state", instanceHandler.GetState)
 	api.DELETE("/instances/:name", instanceHandler.Delete)
 	api.POST("/instances/:name/start", instanceHandler.Start)
 	api.POST("/instances/:name/stop", instanceHandler.Stop)

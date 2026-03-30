@@ -19,6 +19,11 @@ type Instance struct {
 	Network   map[string]NetworkInfo `json:"network,omitempty"`
 }
 
+type InstanceState struct {
+	Name  string `json:"name"`
+	State string `json:"state"`
+}
+
 type Mount struct {
 	Source string `json:"source"`
 	Target string `json:"target"`
@@ -110,6 +115,14 @@ type SnapshotList struct {
 type CreateSnapshotRequest struct {
 	Name    string `json:"name,omitempty"`
 	Comment string `json:"comment,omitempty"`
+}
+
+type SnapshotResponse struct {
+	Message         string `json:"message"`
+	SnapshotName    string `json:"snapshot_name"`
+	InstanceName    string `json:"instance_name"`
+	InstanceStopped bool   `json:"instance_stopped"`
+	InstanceStarted bool   `json:"instance_started"`
 }
 
 type RestoreSnapshotRequest struct {

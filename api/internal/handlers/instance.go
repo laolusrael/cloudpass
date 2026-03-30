@@ -94,6 +94,39 @@ func (h *InstanceHandler) Get(c echo.Context) error {
 	return c.JSON(http.StatusOK, instance)
 }
 
+func (h *InstanceHandler) GetState(c echo.Context) error {
+	name := c.Param("name")
+	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "instance name is required",
+		})
+	}
+
+	instance, err := h.client.GetInstance(name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
+			return c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "not_found",
+				Message: err.Error(),
+			})
+		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to get instance state")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "multipass_error",
+			Message: err.Error(),
+		})
+	}
+
+	logger.API.Debug().Str("name", name).Str("state", instance.State).Msg("got instance state")
+	return c.JSON(http.StatusOK, models.InstanceState{
+		Name:  name,
+		State: instance.State,
+	})
+}
+
 func (h *InstanceHandler) Create(c echo.Context) error {
 	var req models.CreateInstanceRequest
 	if err := c.Bind(&req); err != nil {
@@ -474,7 +507,7 @@ func (h *InstanceHandler) CreateSnapshot(c echo.Context) error {
 		req = models.CreateSnapshotRequest{}
 	}
 
-	err := h.client.CreateSnapshot(name, req.Name, req.Comment)
+	snapshotName, wasStopped, err := h.client.CreateSnapshot(name, req.Name, req.Comment)
 	if err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
@@ -490,9 +523,12 @@ func (h *InstanceHandler) CreateSnapshot(c echo.Context) error {
 		})
 	}
 
-	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("snapshot", req.Name).Msg("snapshot created")
-	return c.JSON(http.StatusCreated, models.InstanceResponse{
-		Message: "Snapshot created",
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("snapshot", snapshotName).Msg("snapshot created")
+	return c.JSON(http.StatusCreated, models.SnapshotResponse{
+		Message:         "Snapshot created successfully",
+		SnapshotName:    snapshotName,
+		InstanceName:    name,
+		InstanceStopped: wasStopped,
 	})
 }
 

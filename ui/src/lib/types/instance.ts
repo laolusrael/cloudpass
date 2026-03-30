@@ -101,6 +101,23 @@ export interface SnapshotList {
 	snapshots: Snapshot[];
 }
 
+export interface SnapshotResponse {
+	message: string;
+	snapshot_name: string;
+	instance_name: string;
+	instance_stopped: boolean;
+	instance_started?: boolean;
+}
+
+export interface InstanceState {
+	name: string;
+	state: string;
+}
+
+export interface SnapshotList {
+	snapshots: Snapshot[];
+}
+
 export interface CreateSnapshotRequest {
 	name?: string;
 	comment?: string;
