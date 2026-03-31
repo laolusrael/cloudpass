@@ -62,7 +62,7 @@ function createJobsStore() {
 		},
 
 		startSSE() {
-			stopPolling();
+			this.stopPolling();
 
 			if (typeof window === 'undefined') return;
 
