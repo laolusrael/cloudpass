@@ -84,13 +84,15 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to initialize job storage")
 	}
 
+	eventHub := handlers.NewEventHub()
+
 	instanceHandler := handlers.NewInstanceHandler(mpClient)
 	imageHandler := handlers.NewImageHandler(mpClient)
 	networkHandler := handlers.NewNetworkHandler(mpClient)
 	healthHandler := handlers.NewHealthHandler()
 	configHandler := handlers.NewConfigHandler(configPath)
 	terminalHandler := websocket.NewTerminalHandler(mpClient)
-	jobHandler := handlers.NewJobHandler(mpClient, cfg.Multipass.DefaultTimeoutSec, jobStorage)
+	jobHandler := handlers.NewJobHandler(mpClient, cfg.Multipass.DefaultTimeoutSec, jobStorage, eventHub)
 
 	jobStorage.Cleanup(24 * time.Hour)
 
@@ -142,6 +144,7 @@ func main() {
 	api.DELETE("/networks/:name", networkHandler.Delete)
 	api.GET("/jobs", jobHandler.List)
 	api.GET("/jobs/:id", jobHandler.Get)
+	api.GET("/jobs/stream", jobHandler.Stream)
 	api.GET("/config", configHandler.Get)
 	api.POST("/config", configHandler.Update)
 

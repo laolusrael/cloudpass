@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { onMount, onDestroy } from 'svelte';
+	import { onMount } from 'svelte';
 	import { instances } from '$lib/stores/instances';
 	import { jobs } from '$lib/stores/jobs';
 	import { notifications } from '$lib/stores/notifications';
@@ -13,11 +13,6 @@
 	onMount(() => {
 		instances.refresh();
 		jobs.refresh();
-		jobs.startPolling(5000);
-	});
-
-	onDestroy(() => {
-		jobs.stopPolling();
 	});
 
 	instances.loading.subscribe((l) => (loading = l));
