@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -11,6 +12,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/ssh"
 )
 
 func setupTerminalRouter() *echo.Echo {
@@ -115,4 +117,28 @@ func TestTerminalMessage_ErrorFormat(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "error", decoded["type"])
 	assert.Contains(t, decoded["data"], "failed to connect via SSH")
+}
+
+func TestMockSSHClient(t *testing.T) {
+	mockClient := &multipass.MockSSHClient{
+		ConnectFunc: func(sshKeyPath, ip string, timeoutSec int) error {
+			return nil
+		},
+		CloseFunc: func() error {
+			return nil
+		},
+		OpenTerminalFunc: func(rows, cols int) (*ssh.Session, error) {
+			return nil, fmt.Errorf("mock terminal not available in tests")
+		},
+	}
+
+	err := mockClient.Connect("", "127.0.0.1", 30)
+	assert.NoError(t, err)
+
+	err = mockClient.Close()
+	assert.NoError(t, err)
+
+	_, err = mockClient.OpenTerminal(24, 80)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "mock terminal not available")
 }
