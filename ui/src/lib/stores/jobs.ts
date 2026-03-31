@@ -85,8 +85,8 @@ function createJobsStore() {
 								await instances.refresh();
 								notifications.show(
 									data.job.status === 'completed'
-										? `Instance "${data.job.instanceName}" is ready`
-										: `Instance "${data.job.instanceName}" failed: ${data.job.error || 'Unknown error'}`,
+										? `Instance "${data.job.instance_name}" is ready`
+										: `Instance "${data.job.instance_name}" failed: ${data.job.error || 'Unknown error'}`,
 									data.job.status === 'completed' ? 'success' : 'error'
 								);
 							} else if (data.job.status === 'running' || data.job.status === 'pending') {
@@ -105,13 +105,11 @@ function createJobsStore() {
 				};
 
 				eventSource.onerror = () => {
-					console.warn('SSE connection error, falling back to polling');
+					console.error('SSE connection lost, stopping stream');
 					this.stopSSE();
-					this.startPolling();
 				};
 			} catch (e) {
 				console.error('Failed to start SSE:', e);
-				this.startPolling();
 			}
 		},
 
