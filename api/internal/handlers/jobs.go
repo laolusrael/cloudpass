@@ -70,9 +70,11 @@ func (h *JobHandler) Stream(c echo.Context) error {
 	c.Response().Header().Set("Access-Control-Allow-Origin", "*")
 	c.Response().Header().Set("X-Accel-Buffering", "no")
 
-	if flusher, ok := c.Response().Writer.(interface{ Flush() }); ok {
-		flusher.Flush()
+	flusher, ok := c.Response().Writer.(interface{ Flush() })
+	if !ok {
+		return echo.NewHTTPError(http.StatusInternalServerError, "streaming not supported")
 	}
+	flusher.Flush()
 
 	ch := h.eventHub.Subscribe()
 	defer h.eventHub.Unsubscribe(ch)
@@ -86,10 +88,10 @@ func (h *JobHandler) Stream(c echo.Context) error {
 			}
 			data, err := json.Marshal(event)
 			if err == nil {
-				c.Response().Write([]byte("data: " + string(data) + "\n\n"))
-				if flusher, ok := c.Response().Writer.(interface{ Flush() }); ok {
-					flusher.Flush()
+				if _, err := c.Response().Write([]byte("data: " + string(data) + "\n\n")); err != nil {
+					return nil
 				}
+				flusher.Flush()
 			}
 		}
 	}
@@ -105,15 +107,15 @@ func (h *JobHandler) Stream(c echo.Context) error {
 				logger.API.Error().Err(err).Msg("failed to marshal event")
 				continue
 			}
-			c.Response().Write([]byte("data: " + string(data) + "\n\n"))
-			if flusher, ok := c.Response().Writer.(interface{ Flush() }); ok {
-				flusher.Flush()
+			if _, err := c.Response().Write([]byte("data: " + string(data) + "\n\n")); err != nil {
+				return nil
 			}
+			flusher.Flush()
 		case <-ticker.C:
-			c.Response().Write([]byte(": heartbeat\n\n"))
-			if flusher, ok := c.Response().Writer.(interface{ Flush() }); ok {
-				flusher.Flush()
+			if _, err := c.Response().Write([]byte(": heartbeat\n\n")); err != nil {
+				return nil
 			}
+			flusher.Flush()
 		case <-c.Request().Context().Done():
 			return nil
 		}
