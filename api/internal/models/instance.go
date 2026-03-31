@@ -177,6 +177,7 @@ type SecurityConfigResponse struct {
 type MultipassConfigResponse struct {
 	SocketPath        string `json:"socket_path"`
 	DefaultTimeoutSec int    `json:"default_timeout_seconds"`
+	SSHKeyPath        string `json:"ssh_key_path"`
 }
 
 type LoggingConfigResponse struct {
@@ -212,6 +213,7 @@ type SecurityUpdateRequest struct {
 type MultipassUpdateRequest struct {
 	SocketPath        string `json:"socket_path,omitempty"`
 	DefaultTimeoutSec int    `json:"default_timeout_seconds,omitempty"`
+	SSHKeyPath        string `json:"ssh_key_path,omitempty"`
 }
 
 type LoggingUpdateRequest struct {

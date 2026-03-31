@@ -6,7 +6,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/rs/zerolog/log"
@@ -41,46 +40,24 @@ func (c *multipassClient) GetInstanceIP(name string) (string, error) {
 	return instance.IPv4[0], nil
 }
 
-func findSSHKey() (string, error) {
-	var keyPaths []string
-
-	switch runtime.GOOS {
-	case "windows":
-		// Windows paths for multipass SSH keys
-		userProfile := os.Getenv("USERPROFILE")
-		if userProfile != "" {
-			keyPaths = []string{
-				filepath.Join(userProfile, "AppData", "Roaming", "multipassd", "ssh-keys", "id_rsa"),
-			}
-		}
-		// Also check systemprofile for service-run instances
-		keyPaths = append(keyPaths, "C:\\Windows\\System32\\config\\systemprofile\\AppData\\Roaming\\multipassd\\ssh-keys\\id_rsa")
-
-	case "darwin":
-		home := os.Getenv("HOME")
-		keyPaths = []string{
-			filepath.Join(home, "Library", "Logs", "Multipass", "ssh-keys", "id_rsa"),
-			filepath.Join(home, ".ssh", "id_rsa"),
-		}
-
-	case "linux":
-		home := os.Getenv("HOME")
-		keyPaths = []string{
-			filepath.Join("/", "var", "snap", "multipass", "common", "data", "multipassd", "ssh-keys", "id_rsa"),
-			filepath.Join(home, ".local", "share", "multipass", "ssh-keys", "id_rsa"),
-			filepath.Join(home, ".ssh", "id_rsa"),
-			"/var/lib/multipass/ssh-keys/id_rsa",
+func findSSHKey(sshKeyPath string) (string, error) {
+	// 1. Check config-specified path first
+	if sshKeyPath != "" {
+		if _, err := os.Stat(sshKeyPath); err == nil {
+			log.Debug().Str("path", sshKeyPath).Msg("found SSH key from config")
+			return sshKeyPath, nil
 		}
 	}
 
-	for _, path := range keyPaths {
-		if _, err := os.Stat(path); err == nil {
-			log.Debug().Str("path", path).Msg("found SSH key")
-			return path, nil
-		}
+	// 2. Check default user path
+	home := os.Getenv("HOME")
+	userKeyPath := filepath.Join(home, ".cloudpass", "multipass_id_rsa")
+	if _, err := os.Stat(userKeyPath); err == nil {
+		log.Debug().Str("path", userKeyPath).Msg("found SSH key at default user path")
+		return userKeyPath, nil
 	}
 
-	return "", fmt.Errorf("no SSH key found in expected locations. Please ensure you have launched at least one instance with 'multipass launch'. SSH keys are typically stored in /var/snap/multipass/common/data/multipassd/ssh-keys/ (snap) or ~/.local/share/multipass/ssh-keys/")
+	return "", fmt.Errorf("SSH key not found. Please ensure the SSH key has been copied to ~/.cloudpass/multipass_id_rsa")
 }
 
 func getKnownHostsPath() (string, error) {
@@ -146,8 +123,8 @@ func hostKeyCallback() (ssh.HostKeyCallback, error) {
 	}, nil
 }
 
-func (s *SSHClient) Connect(ip string, timeoutSec int) error {
-	keyPath, err := findSSHKey()
+func (s *SSHClient) Connect(sshKeyPath, ip string, timeoutSec int) error {
+	keyPath, err := findSSHKey(sshKeyPath)
 	if err != nil {
 		return fmt.Errorf("failed to find SSH key: %w", err)
 	}

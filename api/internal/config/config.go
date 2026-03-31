@@ -35,6 +35,7 @@ type SecurityConfig struct {
 type MultipassConfig struct {
 	SocketPath        string `yaml:"socket_path"`
 	DefaultTimeoutSec int    `yaml:"default_timeout_seconds"`
+	SSHKeyPath        string `yaml:"ssh_key_path"`
 }
 
 type LoggingConfig struct {
@@ -77,6 +78,7 @@ var defaultConfig = Config{
 	Multipass: MultipassConfig{
 		SocketPath:        "",
 		DefaultTimeoutSec: 1800,
+		SSHKeyPath:        "",
 	},
 	Logging: LoggingConfig{
 		Level:  "info",

@@ -23,11 +23,12 @@ type TerminalMessage struct {
 }
 
 type TerminalHandler struct {
-	client multipass.Client
+	client     multipass.Client
+	sshKeyPath string
 }
 
-func NewTerminalHandler(client multipass.Client) *TerminalHandler {
-	return &TerminalHandler{client: client}
+func NewTerminalHandler(client multipass.Client, sshKeyPath string) *TerminalHandler {
+	return &TerminalHandler{client: client, sshKeyPath: sshKeyPath}
 }
 
 func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
@@ -69,7 +70,7 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 	defer cancel()
 
 	sshClient := multipass.NewSSHClient(30)
-	if err := sshClient.Connect(ip, 30); err != nil {
+	if err := sshClient.Connect(h.sshKeyPath, ip, 30); err != nil {
 		log.Error().Err(err).Str("ip", ip).Msg("failed to SSH connect")
 		wsjson.Write(ctx, conn, map[string]string{
 			"type": "error",

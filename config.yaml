@@ -5,8 +5,9 @@ security:
     allowed_ips: []
     websocket_idle_timeout_minutes: 30
 multipass:
-    socket_path: \\.\pipe\multipass
+    socket_path: \.\pipe\multipass
     default_timeout_seconds: 300
+    ssh_key_path: ""
 logging:
     level: info
     format: console
