@@ -1,6 +1,7 @@
 package websocket
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -80,4 +81,38 @@ func TestHandleTerminal_NoIP(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "no IP address")
+}
+
+func TestTerminalMessage_JSONSerialization(t *testing.T) {
+	msg := TerminalMessage{
+		Type: "resize",
+		Cols: 80,
+		Rows: 24,
+	}
+
+	data, err := json.Marshal(msg)
+	assert.NoError(t, err)
+
+	var decoded TerminalMessage
+	err = json.Unmarshal(data, &decoded)
+	assert.NoError(t, err)
+	assert.Equal(t, "resize", decoded.Type)
+	assert.Equal(t, 80, decoded.Cols)
+	assert.Equal(t, 24, decoded.Rows)
+}
+
+func TestTerminalMessage_ErrorFormat(t *testing.T) {
+	errorMsg := map[string]string{
+		"type": "error",
+		"data": "failed to connect via SSH: connection refused",
+	}
+
+	data, err := json.Marshal(errorMsg)
+	assert.NoError(t, err)
+
+	var decoded map[string]string
+	err = json.Unmarshal(data, &decoded)
+	assert.NoError(t, err)
+	assert.Equal(t, "error", decoded["type"])
+	assert.Contains(t, decoded["data"], "failed to connect via SSH")
 }
