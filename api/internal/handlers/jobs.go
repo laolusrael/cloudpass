@@ -88,10 +88,16 @@ func (h *JobHandler) Stream(c echo.Context) error {
 			}
 			data, err := json.Marshal(event)
 			if err == nil {
-				if _, err := c.Response().Write([]byte("data: " + string(data) + "\n\n")); err != nil {
+				select {
+				case <-c.Request().Context().Done():
 					return nil
+				default:
+					if _, err := c.Response().Write([]byte("data: " + string(data) + "\n\n")); err != nil {
+						logger.API.Debug().Err(err).Msg("SSE initial write error")
+						return nil
+					}
+					flusher.Flush()
 				}
-				flusher.Flush()
 			}
 		}
 	}
@@ -108,15 +114,23 @@ func (h *JobHandler) Stream(c echo.Context) error {
 				continue
 			}
 			if _, err := c.Response().Write([]byte("data: " + string(data) + "\n\n")); err != nil {
+				logger.API.Debug().Err(err).Msg("SSE write error, closing connection")
 				return nil
 			}
 			flusher.Flush()
 		case <-ticker.C:
-			if _, err := c.Response().Write([]byte(": heartbeat\n\n")); err != nil {
+			select {
+			case <-c.Request().Context().Done():
 				return nil
+			default:
+				if _, err := c.Response().Write([]byte(": heartbeat\n\n")); err != nil {
+					logger.API.Debug().Err(err).Msg("SSE heartbeat write error, closing connection")
+					return nil
+				}
+				flusher.Flush()
 			}
-			flusher.Flush()
 		case <-c.Request().Context().Done():
+			logger.API.Debug().Msg("SSE client disconnected")
 			return nil
 		}
 	}
