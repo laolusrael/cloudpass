@@ -66,6 +66,7 @@ func findSSHKey() (string, error) {
 	case "linux":
 		home := os.Getenv("HOME")
 		keyPaths = []string{
+			filepath.Join("/", "var", "snap", "multipass", "common", "data", "multipassd", "ssh-keys", "id_rsa"),
 			filepath.Join(home, ".local", "share", "multipass", "ssh-keys", "id_rsa"),
 			filepath.Join(home, ".ssh", "id_rsa"),
 			"/var/lib/multipass/ssh-keys/id_rsa",
@@ -79,7 +80,7 @@ func findSSHKey() (string, error) {
 		}
 	}
 
-	return "", fmt.Errorf("no SSH key found in expected locations")
+	return "", fmt.Errorf("no SSH key found in expected locations. Please ensure you have launched at least one instance with 'multipass launch'. SSH keys are typically stored in /var/snap/multipass/common/data/multipassd/ssh-keys/ (snap) or ~/.local/share/multipass/ssh-keys/")
 }
 
 func getKnownHostsPath() (string, error) {
