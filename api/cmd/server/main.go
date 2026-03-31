@@ -91,7 +91,7 @@ func main() {
 	networkHandler := handlers.NewNetworkHandler(mpClient)
 	healthHandler := handlers.NewHealthHandler()
 	configHandler := handlers.NewConfigHandler(configPath)
-	terminalHandler := websocket.NewTerminalHandler(mpClient)
+	terminalHandler := websocket.NewTerminalHandler(mpClient, cfg.Multipass.SSHKeyPath)
 	jobHandler := handlers.NewJobHandler(mpClient, cfg.Multipass.DefaultTimeoutSec, jobStorage, eventHub)
 
 	jobStorage.Cleanup(24 * time.Hour)
@@ -158,6 +158,8 @@ func main() {
 	}
 
 	printBanner(cfg.Server.Host, cfg.Server.Port)
+
+	checkSSHKeySetup(cfg.Multipass.SSHKeyPath)
 
 	go func() {
 		log.Info().Str("addr", addr).Msg("server listening")
@@ -226,4 +228,41 @@ func getLocalIP() string {
 	}
 
 	return ""
+}
+
+func checkSSHKeySetup(sshKeyPath string) {
+	homeDir, err := os.UserHomeDir()
+	if err != nil {
+		return
+	}
+
+	userSSHKeyPath := filepath.Join(homeDir, ".cloudpass", "multipass_id_rsa")
+
+	keyExists := false
+	if sshKeyPath != "" {
+		if _, err := os.Stat(sshKeyPath); err == nil {
+			keyExists = true
+		}
+	}
+	if !keyExists {
+		if _, err := os.Stat(userSSHKeyPath); err == nil {
+			keyExists = true
+		}
+	}
+
+	if !keyExists {
+		fmt.Println("")
+		fmt.Println("================================================================================")
+		fmt.Println("WARNING: SSH key for terminal access not configured.")
+		fmt.Println("")
+		fmt.Println("To enable terminal functionality, run these commands:")
+		fmt.Println("")
+		fmt.Println("  sudo cp /var/snap/multipass/common/data/multipassd/ssh-keys/id_rsa \\")
+		fmt.Println("       ~/.cloudpass/multipass_id_rsa")
+		fmt.Println("  sudo chmod 600 ~/.cloudpass/multipass_id_rsa")
+		fmt.Println("")
+		fmt.Println("Then restart CloudPass.")
+		fmt.Println("================================================================================")
+		fmt.Println("")
+	}
 }

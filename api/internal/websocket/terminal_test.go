@@ -19,7 +19,7 @@ func setupTerminalRouter() *echo.Echo {
 
 func TestHandleTerminal_EmptyName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
-	handler := NewTerminalHandler(mockClient)
+	handler := NewTerminalHandler(mockClient, "")
 
 	e := setupTerminalRouter()
 	e.GET("/instances/:name/terminal", handler.HandleTerminal)
@@ -36,7 +36,7 @@ func TestHandleTerminal_NonExistent(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetGetInstanceErr(assert.AnError)
 
-	handler := NewTerminalHandler(mockClient)
+	handler := NewTerminalHandler(mockClient, "")
 
 	e := setupTerminalRouter()
 	e.GET("/instances/:name/terminal", handler.HandleTerminal)
@@ -52,7 +52,7 @@ func TestHandleTerminal_StoppedInstance(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "stopped", State: "Stopped", IPv4: []string{"192.168.1.100"}}})
 
-	handler := NewTerminalHandler(mockClient)
+	handler := NewTerminalHandler(mockClient, "")
 
 	e := setupTerminalRouter()
 	e.GET("/instances/:name/terminal", handler.HandleTerminal)
@@ -69,7 +69,7 @@ func TestHandleTerminal_NoIP(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "noip", State: "Running", IPv4: []string{}}})
 
-	handler := NewTerminalHandler(mockClient)
+	handler := NewTerminalHandler(mockClient, "")
 
 	e := setupTerminalRouter()
 	e.GET("/instances/:name/terminal", handler.HandleTerminal)

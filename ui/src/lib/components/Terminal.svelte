@@ -39,13 +39,25 @@
 		};
 
 		ws.onmessage = (event) => {
+			try {
+				const msg = JSON.parse(event.data);
+				if (msg.type === 'error') {
+					error = msg.data;
+					connected = false;
+					return;
+				}
+			} catch {
+				// Not JSON, treat as terminal data
+			}
 			const data = new Uint8Array(event.data);
 			terminal?.write(data);
 		};
 
 		ws.onclose = () => {
+			if (!error) {
+				terminal?.write('\r\n\x1b[33mDisconnected\x1b[0m\r\n');
+			}
 			connected = false;
-			terminal?.write('\r\n\x1b[33mDisconnected\x1b[0m\r\n');
 		};
 
 		ws.onerror = () => {

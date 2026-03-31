@@ -42,6 +42,7 @@ func (h *ConfigHandler) Get(c echo.Context) error {
 		Multipass: models.MultipassConfigResponse{
 			SocketPath:        cfg.Multipass.SocketPath,
 			DefaultTimeoutSec: cfg.Multipass.DefaultTimeoutSec,
+			SSHKeyPath:        cfg.Multipass.SSHKeyPath,
 		},
 		Logging: models.LoggingConfigResponse{
 			Level:  cfg.Logging.Level,
@@ -104,6 +105,10 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 		}
 		if req.Multipass.DefaultTimeoutSec > 0 {
 			cfg.Multipass.DefaultTimeoutSec = req.Multipass.DefaultTimeoutSec
+			modified = true
+		}
+		if req.Multipass.SSHKeyPath != "" {
+			cfg.Multipass.SSHKeyPath = req.Multipass.SSHKeyPath
 			modified = true
 		}
 	}

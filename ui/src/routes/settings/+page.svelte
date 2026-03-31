@@ -18,6 +18,7 @@
 	let websocketTimeout = $state(0);
 	let socketPath = $state('');
 	let timeoutSec = $state(0);
+	let sshKeyPath = $state('');
 	let logLevel = $state('');
 	let logFormat = $state('');
 	let logOutput = $state('');
@@ -33,6 +34,7 @@
 			websocketTimeout = config.security.websocket_timeout_minutes;
 			socketPath = config.multipass.socket_path;
 			timeoutSec = config.multipass.default_timeout_seconds;
+			sshKeyPath = config.multipass.ssh_key_path;
 			logLevel = config.logging.level;
 			logFormat = config.logging.format;
 			logOutput = config.logging.output;
@@ -65,10 +67,11 @@
 					allowed_ips: ips,
 					websocket_timeout_minutes: websocketTimeout
 				},
-				multipass: {
-					socket_path: socketPath,
-					default_timeout_seconds: timeoutSec
-				},
+			multipass: {
+				socket_path: socketPath,
+				default_timeout_seconds: timeoutSec,
+				ssh_key_path: sshKeyPath
+			},
 				logging: {
 					level: logLevel,
 					format: logFormat,
@@ -195,6 +198,21 @@
 							class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
 							placeholder="300"
 						/>
+					</div>
+					<div>
+						<label for="ssh-key-path" class="block text-sm font-medium text-gray-700 mb-1">
+							SSH Key Path (for terminal access)
+						</label>
+						<input
+							id="ssh-key-path"
+							type="text"
+							bind:value={sshKeyPath}
+							class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+							placeholder="~/.cloudpass/multipass_id_rsa (auto-detected if empty)"
+						/>
+						<p class="mt-1 text-xs text-gray-500">
+							Leave empty to use default path (~/.cloudpass/multipass_id_rsa)
+						</p>
 					</div>
 				</div>
 			</Card>

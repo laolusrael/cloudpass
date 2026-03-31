@@ -192,6 +192,7 @@ export interface ConfigResponse {
 	multipass: {
 		socket_path: string;
 		default_timeout_seconds: number;
+		ssh_key_path: string;
 	};
 	logging: {
 		level: string;
@@ -212,6 +213,7 @@ export interface ConfigUpdateRequest {
 	multipass?: {
 		socket_path?: string;
 		default_timeout_seconds?: number;
+		ssh_key_path?: string;
 	};
 	logging?: {
 		level?: string;
