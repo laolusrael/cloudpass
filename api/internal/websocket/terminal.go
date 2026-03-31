@@ -66,6 +66,8 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 	}
 	defer conn.CloseNow()
 
+	log.Debug().Str("instance", name).Str("ip", ip).Msg("WebSocket terminal connection started")
+
 	ctx, cancel := context.WithCancel(c.Request().Context())
 	defer cancel()
 
@@ -80,6 +82,8 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 	}
 	defer sshClient.Close()
 
+	log.Debug().Str("ip", ip).Msg("SSH connection established")
+
 	session, err := sshClient.OpenTerminal(24, 80)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to open terminal session")
@@ -90,6 +94,8 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 		return nil
 	}
 	defer session.Close()
+
+	log.Debug().Msg("Terminal session opened")
 
 	stdin, err := session.StdinPipe()
 	if err != nil {
@@ -134,6 +140,7 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 			}
 
 			if msg.Type == "resize" && msg.Cols > 0 && msg.Rows > 0 {
+				log.Debug().Int("cols", msg.Cols).Int("rows", msg.Rows).Msg("Received resize event")
 				err := session.WindowChange(msg.Rows, msg.Cols)
 				if err != nil {
 					log.Warn().Err(err).Msg("failed to resize terminal")
@@ -148,7 +155,9 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 		defer wg.Done()
 		defer cancel()
 		defer stdin.Close()
-		io.Copy(stdin, websocket.NetConn(ctx, conn, websocket.MessageBinary))
+		log.Debug().Msg("Starting stdin copy")
+		n, err := io.Copy(stdin, websocket.NetConn(ctx, conn, websocket.MessageBinary))
+		log.Debug().Int64("bytes", n).Err(err).Msg("Stdin copy finished")
 	}()
 
 	// Stream stdout from SSH to WebSocket
@@ -156,7 +165,9 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 	go func() {
 		defer wg.Done()
 		defer cancel()
-		io.Copy(websocket.NetConn(ctx, conn, websocket.MessageBinary), stdout)
+		log.Debug().Msg("Starting stdout copy")
+		n, err := io.Copy(websocket.NetConn(ctx, conn, websocket.MessageBinary), stdout)
+		log.Debug().Int64("bytes", n).Err(err).Msg("Stdout copy finished")
 	}()
 
 	// Stream stderr from SSH to WebSocket
@@ -164,10 +175,14 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 	go func() {
 		defer wg.Done()
 		defer cancel()
-		io.Copy(websocket.NetConn(ctx, conn, websocket.MessageBinary), stderr)
+		log.Debug().Msg("Starting stderr copy")
+		n, err := io.Copy(websocket.NetConn(ctx, conn, websocket.MessageBinary), stderr)
+		log.Debug().Int64("bytes", n).Err(err).Msg("Stderr copy finished")
 	}()
 
 	wg.Wait()
+
+	log.Debug().Msg("Terminal session ended")
 
 	return nil
 }

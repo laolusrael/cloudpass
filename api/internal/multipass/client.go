@@ -183,6 +183,19 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 	return instance, nil
 }
 
+func (c *multipassClient) GetInstanceIP(name string) (string, error) {
+	instance, err := c.GetInstance(name)
+	if err != nil {
+		return "", err
+	}
+
+	if len(instance.IPv4) == 0 {
+		return "", fmt.Errorf("instance has no IPv4 address")
+	}
+
+	return instance.IPv4[0], nil
+}
+
 func (c *multipassClient) CreateInstance(opts models.CreateInstanceRequest) (*models.Instance, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
