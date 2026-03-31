@@ -67,7 +67,7 @@ function createJobsStore() {
 			if (typeof window === 'undefined') return;
 
 			const apiUrl = import.meta.env.VITE_API_URL || '';
-			const sseUrl = `${apiUrl}/api/v1/jobs/stream`;
+			const sseUrl = `${apiUrl}/api/jobs/stream`;
 
 			try {
 				eventSource = new EventSource(sseUrl);
