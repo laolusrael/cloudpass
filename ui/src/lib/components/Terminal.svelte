@@ -38,19 +38,23 @@
 			terminal?.write('\r\n\x1b[32mConnected to ' + instanceName + '\x1b[0m\r\n$ ');
 		};
 
-		ws.onmessage = (event) => {
-			try {
-				const msg = JSON.parse(event.data);
-				if (msg.type === 'error') {
-					error = msg.data;
-					connected = false;
-					return;
+		ws.onmessage = async (event) => {
+			if (event.data instanceof Blob) {
+				const buf = await event.data.arrayBuffer();
+				terminal?.write(new Uint8Array(buf));
+			} else {
+				try {
+					const msg = JSON.parse(event.data);
+					if (msg.type === 'error') {
+						error = msg.data;
+						connected = false;
+						return;
+					}
+				} catch {
+					// Plain text - write to terminal
+					terminal?.write(event.data);
 				}
-			} catch {
-				// Not JSON, treat as terminal data
 			}
-			const data = new Uint8Array(event.data);
-			terminal?.write(data);
 		};
 
 		ws.onclose = () => {

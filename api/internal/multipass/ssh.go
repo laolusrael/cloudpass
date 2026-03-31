@@ -2,6 +2,7 @@ package multipass
 
 import (
 	"bufio"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"os"
@@ -85,7 +86,7 @@ func hostKeyCallback() (ssh.HostKeyCallback, error) {
 	}
 
 	return func(hostname string, remote net.Addr, key ssh.PublicKey) error {
-		keyBytes := strings.TrimSpace(string(key.Marshal()))
+		keyBytes := base64.StdEncoding.EncodeToString(key.Marshal())
 
 		if data, err := os.ReadFile(knownHostsPath); err == nil {
 			scanner := bufio.NewScanner(strings.NewReader(string(data)))

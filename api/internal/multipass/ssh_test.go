@@ -103,3 +103,82 @@ func TestGetInstanceIP_MultipleIPv4(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, "192.168.1.100", ip)
 }
+
+func TestFindSSHKey_WithConfigPath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	keyPath := filepath.Join(tmpDir, "id_rsa")
+	err := os.WriteFile(keyPath, []byte("test-key-content"), 0600)
+	require.NoError(t, err)
+
+	foundPath, err := findSSHKey(keyPath)
+	assert.NoError(t, err)
+	assert.Equal(t, keyPath, foundPath)
+}
+
+func TestFindSSHKey_WithUserPath(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	origHome := os.Getenv("HOME")
+	defer func() {
+		if origHome != "" {
+			os.Setenv("HOME", origHome)
+		}
+	}()
+	os.Setenv("HOME", tmpDir)
+
+	userKeyDir := filepath.Join(tmpDir, ".cloudpass")
+	err := os.MkdirAll(userKeyDir, 0700)
+	require.NoError(t, err)
+
+	userKeyPath := filepath.Join(userKeyDir, "multipass_id_rsa")
+	err = os.WriteFile(userKeyPath, []byte("test-user-key"), 0600)
+	require.NoError(t, err)
+
+	foundPath, err := findSSHKey("")
+	assert.NoError(t, err)
+	assert.Equal(t, userKeyPath, foundPath)
+}
+
+func TestFindSSHKey_NotFound(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	origHome := os.Getenv("HOME")
+	defer func() {
+		if origHome != "" {
+			os.Setenv("HOME", origHome)
+		}
+	}()
+	os.Setenv("HOME", tmpDir)
+
+	_, err := findSSHKey("")
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "SSH key not found")
+}
+
+func TestFindSSHKey_ConfigPathTakesPrecedence(t *testing.T) {
+	tmpDir := t.TempDir()
+
+	origHome := os.Getenv("HOME")
+	defer func() {
+		if origHome != "" {
+			os.Setenv("HOME", origHome)
+		}
+	}()
+	os.Setenv("HOME", tmpDir)
+
+	configKeyPath := filepath.Join(tmpDir, "config-key")
+	err := os.WriteFile(configKeyPath, []byte("config-key-content"), 0600)
+	require.NoError(t, err)
+
+	userKeyDir := filepath.Join(tmpDir, ".cloudpass")
+	err = os.MkdirAll(userKeyDir, 0700)
+	require.NoError(t, err)
+	userKeyPath := filepath.Join(userKeyDir, "multipass_id_rsa")
+	err = os.WriteFile(userKeyPath, []byte("user-key-content"), 0600)
+	require.NoError(t, err)
+
+	foundPath, err := findSSHKey(configKeyPath)
+	assert.NoError(t, err)
+	assert.Equal(t, configKeyPath, foundPath)
+}
