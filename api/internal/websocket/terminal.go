@@ -2,6 +2,7 @@ package websocket
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net/http"
@@ -123,14 +124,13 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 
 	var wg sync.WaitGroup
 
-	// Handle WebSocket messages (resize events)
+	// Handle WebSocket messages - distinguish between text (resize) and binary (terminal data)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		defer cancel()
 		for {
-			var msg TerminalMessage
-			err := wsjson.Read(ctx, conn, &msg)
+			typ, data, err := conn.Read(ctx)
 			if err != nil {
 				if ctx.Err() != nil {
 					return
@@ -139,13 +139,23 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 				return
 			}
 
-			if msg.Type == "resize" && msg.Cols > 0 && msg.Rows > 0 {
-				log.Debug().Int("cols", msg.Cols).Int("rows", msg.Rows).Msg("Received resize event")
-				err := session.WindowChange(msg.Rows, msg.Cols)
-				if err != nil {
-					log.Warn().Err(err).Msg("failed to resize terminal")
+			if typ == websocket.MessageText {
+				// Parse as JSON for resize events
+				var msg TerminalMessage
+				if err := json.Unmarshal(data, &msg); err != nil {
+					log.Debug().Err(err).Msg("failed to parse JSON message")
+					continue
+				}
+
+				if msg.Type == "resize" && msg.Cols > 0 && msg.Rows > 0 {
+					log.Debug().Int("cols", msg.Cols).Int("rows", msg.Rows).Msg("Received resize event")
+					err := session.WindowChange(msg.Rows, msg.Cols)
+					if err != nil {
+						log.Warn().Err(err).Msg("failed to resize terminal")
+					}
 				}
 			}
+			// Binary messages are handled by stdin copy goroutine
 		}
 	}()
 
