@@ -80,4 +80,40 @@ describe('Terminal WebSocket Message Handling', () => {
 
 		expect(decoded).toBe(textData);
 	});
+
+	it('should encode terminal commands correctly for SSH', () => {
+		const testCases = [
+			{ input: 'ls -la', expectedLength: 6 },
+			{ input: 'echo hello', expectedLength: 11 },
+			{ input: 'pwd', expectedLength: 3 },
+			{ input: '\r', expectedLength: 1 },
+			{ input: '\n', expectedLength: 1 },
+			{ input: '\u0003', expectedLength: 1 },
+		];
+
+		testCases.forEach(({ input, expectedLength }) => {
+			const encoder = new TextEncoder();
+			const encoded = encoder.encode(input);
+			expect(encoded.length).toBe(expectedLength);
+			expect(encoded instanceof Uint8Array).toBe(true);
+		});
+	});
+
+	it('should round-trip terminal data without loss', () => {
+		const commands = [
+			'ls -la',
+			'cd /tmp && pwd',
+			'echo "test with spaces"',
+			'cat file.txt | head -n 10',
+		];
+
+		const encoder = new TextEncoder();
+		const decoder = new TextDecoder();
+
+		commands.forEach((cmd) => {
+			const encoded = encoder.encode(cmd);
+			const decoded = decoder.decode(encoded);
+			expect(decoded).toBe(cmd);
+		});
+	});
 });

@@ -142,3 +142,54 @@ func TestMockSSHClient(t *testing.T) {
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "mock terminal not available")
 }
+
+func TestTerminalMessage_ResizeMessageFormat(t *testing.T) {
+	tests := []struct {
+		name     string
+		msg      TerminalMessage
+		expected string
+	}{
+		{
+			name: "standard resize 80x24",
+			msg: TerminalMessage{
+				Type: "resize",
+				Cols: 80,
+				Rows: 24,
+			},
+			expected: `{"type":"resize","cols":80,"rows":24}`,
+		},
+		{
+			name: "resize 120x40",
+			msg: TerminalMessage{
+				Type: "resize",
+				Cols: 120,
+				Rows: 40,
+			},
+			expected: `{"type":"resize","cols":120,"rows":40}`,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			data, err := json.Marshal(tt.msg)
+			assert.NoError(t, err)
+			assert.JSONEq(t, tt.expected, string(data))
+		})
+	}
+}
+
+func TestTerminalMessage_BinaryMessageDetection(t *testing.T) {
+	binaryData := []byte("ls -la")
+
+	var msg TerminalMessage
+	err := json.Unmarshal(binaryData, &msg)
+	assert.Error(t, err, "Binary data should fail to parse as JSON")
+
+	binaryMsg := TerminalMessage{
+		Type: "binary",
+		Data: string(binaryData),
+	}
+	data, err := json.Marshal(binaryMsg)
+	assert.NoError(t, err)
+	assert.Contains(t, string(data), "binary")
+}
