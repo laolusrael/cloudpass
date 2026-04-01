@@ -124,11 +124,12 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 
 	var wg sync.WaitGroup
 
-	// Handle WebSocket messages - distinguish between text (resize) and binary (terminal data)
+	// Handle ALL WebSocket messages - both text (resize) and binary (typing)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		defer cancel()
+		defer stdin.Close()
 		for {
 			typ, data, err := conn.Read(ctx)
 			if err != nil {
@@ -154,20 +155,14 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 						log.Warn().Err(err).Msg("failed to resize terminal")
 					}
 				}
+			} else if typ == websocket.MessageBinary {
+				// Write binary data (user typing) directly to stdin
+				if _, err := stdin.Write(data); err != nil {
+					log.Debug().Err(err).Msg("failed to write to stdin")
+					return
+				}
 			}
-			// Binary messages are handled by stdin copy goroutine
 		}
-	}()
-
-	// Stream stdin from WebSocket to SSH
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		defer cancel()
-		defer stdin.Close()
-		log.Debug().Msg("Starting stdin copy")
-		n, err := io.Copy(stdin, websocket.NetConn(ctx, conn, websocket.MessageBinary))
-		log.Debug().Int64("bytes", n).Err(err).Msg("Stdin copy finished")
 	}()
 
 	// Stream stdout from SSH to WebSocket
