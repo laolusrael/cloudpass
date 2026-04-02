@@ -131,9 +131,9 @@ setup_multipass_auth() {
     fi
 
     info "Setting multipass passphrase..."
-    if echo "$passphrase" | multipass set local.passphrase 2>/dev/null; then
+    if multipass set local.passphrase="$passphrase" 2>/dev/null; then
         info "Passphrase set successfully"
-    elif echo "$passphrase" | sudo multipass set local.passphrase 2>/dev/null; then
+    elif sudo multipass set local.passphrase="$passphrase" 2>/dev/null; then
         info "Passphrase set successfully (via sudo)"
     else
         warn "Could not set multipass passphrase automatically"
@@ -184,7 +184,7 @@ print_authentication_guide() {
     echo ""
 }
 
-setup_multipass_auth
+setup_multipass_auth || true
 
 info "Setting ownership..."
 chown -R "$CLOUDPASS_USER:$CLOUDPASS_GROUP" "$INSTALL_DIR"
