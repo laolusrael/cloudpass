@@ -104,44 +104,46 @@ if [ "$PORT" != "8080" ]; then
     sed -i "s/port: 8080/port: $PORT/" "$INSTALL_DIR/config.yaml"
 fi
 
-setup_sudo_permissions() {
-    local multipass_path
+setup_multipass_auth() {
+    local cert_source=""
+    local cert_dir="/var/snap/multipass/common/data/multipassd/authenticated-certs"
     
-    # Find multipass binary
-    if command -v multipass &>/dev/null; then
-        multipass_path=$(which multipass)
-    elif [ -x /snap/bin/multipass ]; then
-        multipass_path="/snap/bin/multipass"
-    elif [ -x /usr/bin/multipass ]; then
-        multipass_path="/usr/bin/multipass"
+    # Find multipass certificate
+    if [ -f "$HOME/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem" ]; then
+        cert_source="$HOME/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem"
+    elif [ -f "/root/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem" ]; then
+        cert_source="/root/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem"
     else
-        warn "Could not find multipass - sudo permissions not configured"
-        warn "CloudPass may fail to control instances without proper permissions"
+        warn "Could not find multipass certificate"
+        warn "CloudPass may fail to control instances without authentication"
         return
     fi
     
-    info "Configuring sudo permissions for cloudpass user..."
+    # Create authenticated-certs directory if needed
+    mkdir -p "$cert_dir"
     
-    cat > /etc/sudoers.d/cloudpass-multipass << EOF
-# CloudPass sudo permissions for multipass CLI
-cloudpass ALL=(root) NOPASSWD: $multipass_path list
-cloudpass ALL=(root) NOPASSWD: $multipass_path info *
-cloudpass ALL=(root) NOPASSWD: $multipass_path start *
-cloudpass ALL=(root) NOPASSWD: $multipass_path stop *
-cloudpass ALL=(root) NOPASSWD: $multipass_path delete *
-cloudpass ALL=(root) NOPASSWD: $multipass_path launch *
-cloudpass ALL=(root) NOPASSWD: $multipass_path suspend *
-cloudpass ALL=(root) NOPASSWD: $multipass_path resume *
-cloudpass ALL=(root) NOPASSWD: $multipass_path images
-cloudpass ALL=(root) NOPASSWD: $multipass_path networks
-cloudpass ALL=(root) NOPASSWD: $multipass_path create *
-EOF
+    # Add certificate if not already present
+    if ! grep -q "$(cat "$cert_source")" "$cert_dir/multipass_client_certs.pem" 2>/dev/null; then
+        info "Adding cloudpass user to multipass authenticated certificates..."
+        cat "$cert_source" >> "$cert_dir/multipass_client_certs.pem"
+        chmod 0644 "$cert_dir/multipass_client_certs.pem"
+    else
+        info "CloudPass certificate already exists in multipass authenticated certificates"
+    fi
     
-    chmod 0440 /etc/sudoers.d/cloudpass-multipass
-    info "Sudo permissions configured"
+    # Restart multipass to apply changes
+    info "Restarting multipass service..."
+    if command -v snap &>/dev/null; then
+        snap restart multipass 2>/dev/null || true
+    fi
+    
+    # Wait for multipass to be ready
+    sleep 2
+    
+    info "Multipass authentication configured"
 }
 
-setup_sudo_permissions
+setup_multipass_auth
 
 info "Setting ownership..."
 chown -R "$CLOUDPASS_USER:$CLOUDPASS_GROUP" "$INSTALL_DIR"

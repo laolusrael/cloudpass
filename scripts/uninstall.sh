@@ -42,6 +42,9 @@ if [ -f /etc/sudoers.d/cloudpass-multipass ]; then
     rm -f /etc/sudoers.d/cloudpass-multipass
 fi
 
+# Note: Multipass authentication certificates are NOT removed
+# as they may be needed by other users or reinstalls
+
 if [ -d "$INSTALL_DIR" ]; then
     info "Removing installation directory..."
     rm -rf "$INSTALL_DIR"
