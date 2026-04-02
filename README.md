@@ -16,8 +16,9 @@
 - **Real-time Status**: Auto-refreshing dashboard with live instance status
 - **Web UI**: Modern Svelte-based interface with grayscale design
 - **REST API**: Programmatic access via RESTful endpoints
-- **Docker Support**: Easy deployment with Docker and Docker Compose
+- **SSH Terminal**: Web-based terminal access to instances
 - **IP Whitelist**: Security middleware for LAN access control
+- **Jobs API**: Async operations for long-running tasks
 
 ---
 
@@ -26,63 +27,107 @@
 ### Prerequisites
 
 - [Multipass](https://multipass.run/) installed on the server
-- Docker and Docker Compose (for containerized deployment)
-- Go 1.24+ (for development)
+- Go 1.25+ (for development)
 - Node.js 20+ (for frontend development)
 
-### Using Docker Compose
+### Quick Start
+
+#### Option 1: Pre-built Binary
 
 ```bash
 # Clone the repository
 git clone https://github.com/laolusrael/cloudpass.git
 cd cloudpass
 
-# Start the services
-docker-compose up -d
+# Download the latest release for your platform
+# Visit: https://github.com/laolusrael/cloudpass/releases
+
+# Or build from source
+./build.sh
+
+# Start the server
+./cloudpass
 
 # Access the UI
-# API: http://localhost:8080
-# UI: http://localhost:3000
+# http://localhost:8080
 ```
 
-## Deployment
+#### Option 2: Build from Source
 
-### Option 1: Docker Compose (Recommended)
-
-Follow the Docker Compose instructions in the Quick Start section above.
-
-### Option 2: Direct Server Deployment (Without Docker)
-
-For deploying on a server without Docker:
-
-1. **Build the API**
 ```bash
+# Clone the repository
+git clone https://github.com/laolusrael/cloudpass.git
+cd cloudpass
+
+# Build the API
 cd api
 go build -o cloudpass ./cmd/server
-```
+cd ..
 
-2. **Build the Frontend**
-```bash
+# Build the Frontend
 cd ui
 npm install
 npm run build
+cd ..
+
+# Copy frontend build to API
+cp -r ui/build api/internal/web/build
+
+# Start the server
+./api/cloudpass
 ```
 
-3. **Set up Nginx as Reverse Proxy**
-- Install nginx
-- Configure nginx to serve static files from ui/build and proxy API requests to the Go server
-- Example nginx config provided
+### Deployment
 
-4. **Create Systemd Service**
-- Create a systemd service file for the API server
-- Enable and start the service
+#### Option 1: Binary Release
 
-5. **Security Configuration**
-- Set allowed IPs in config.yaml for IP whitelist
-- Use firewall rules
+1. Download the latest release from [GitHub Releases](https://github.com/laolusrael/cloudpass/releases)
+2. Extract the archive
+3. Configure `config.yaml` as needed
+4. Run `./cloudpass`
 
-6. **Access the Application**
-- Access via nginx (e.g., http://your-server)
+#### Option 2: Build from Source
+
+```bash
+# Build API and UI
+./build.sh
+
+# Configure
+# Edit config.yaml as needed
+
+# Run the server
+./cloudpass
+```
+
+#### Option 3: With Nginx Reverse Proxy
+
+1. **Build and run CloudPass** (as above)
+2. **Install nginx**
+3. **Configure nginx** to proxy API and serve static files:
+
+```nginx
+server {
+    listen 80;
+    server_name your-server;
+
+    # API proxy
+    location /api/ {
+        proxy_pass http://localhost:8080/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+    }
+
+    # Static files
+    location / {
+        root /path/to/cloudpass/api/internal/web/build;
+        try_files $uri $uri/ /index.html;
+    }
+}
+```
+
+4. **Create systemd service** (optional):
 
 ### Manual Setup
 
@@ -159,6 +204,9 @@ logging:
 | `POST` | `/api/instances/:name/restart` | Restart instance |
 | `GET` | `/api/images` | List available images |
 | `GET` | `/api/networks` | List available networks |
+| `GET` | `/api/jobs` | List all jobs |
+| `GET` | `/api/jobs/:id` | Get job status |
+| `WS` | `/api/instances/:name/shell` | WebSocket terminal |
 
 ---
 
@@ -171,14 +219,17 @@ See [AGENTS.md](AGENTS.md) for contribution guidelines.
 ```
 cloudpass/
 ├── api/                    # Go backend
-│   ├── cmd/server/        # Entry point
+│   ├── cmd/server/         # Entry point
 │   ├── internal/
-│   │   ├── handlers/      # HTTP handlers
-│   │   ├── middleware/    # Middleware
-│   │   ├── multipass/     # CLI wrapper
-│   │   ├── models/        # Data models
-│   │   └── config/        # Configuration
-│   └── Dockerfile
+│   │   ├── handlers/       # HTTP handlers (instances, networks, images, jobs)
+│   │   ├── middleware/    # Middleware (IP whitelist, logging)
+│   │   ├── multipass/     # CLI wrapper (client, SSH)
+│   │   ├── models/       # Data models
+│   │   ├── config/       # Configuration
+│   │   ├── logger/       # Logging
+│   │   ├── web/          # Embedded UI
+│   │   └── websocket/    # WebSocket terminal
+│   └── internal/web/     # UI build output (embedded)
 ├── ui/                     # Svelte frontend
 │   ├── src/
 │   │   ├── lib/
@@ -186,24 +237,29 @@ cloudpass/
 │   │   │   ├── services/    # API client
 │   │   │   ├── stores/      # Svelte stores
 │   │   │   └── types/       # TypeScript types
-│   │   └── routes/        # Pages
-│   └── Dockerfile
-├── docker-compose.yml
+│   │   └── routes/         # Pages
+│   └── static/
+├── build.sh                # Build script
+├── release.sh              # Release script
+├── config.yaml             # Configuration
 └── README.md
 ```
 
 ### Running Tests
 
 ```bash
-# Backend tests
+# Backend tests (use -tags ci to skip web embed)
 cd api
-go test ./...
+go test -tags ci ./...
 
 # Frontend tests
 cd ui
 npm run test
 
 # Lint
+cd api && golangci-lint run --build-tags ci ./...
+cd ui && npm run lint
+```
 cd api && golangci-lint run ./...
 cd ui && npm run lint
 ```
@@ -216,9 +272,9 @@ cd ui && npm run lint
 |-------|------------|
 | Backend | Go, Echo |
 | Frontend | Svelte, TypeScript, Vite |
-| Styling | Tailwind CSS |
+| Styling | Plain CSS (grayscale) |
 | Terminal | xterm.js |
-| Container | Docker, Docker Compose |
+| Testing | Go testing, Vitest, Playwright (E2E) |
 
 ---
 

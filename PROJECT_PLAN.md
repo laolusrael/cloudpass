@@ -19,9 +19,8 @@ CloudPass is an open-source web-based management interface for Canonical's Multi
 | **Backend** | Go + Echo | REST API server |
 | **Frontend** | Svelte + TypeScript | Web UI |
 | **Build** | Vite | Frontend bundling |
-| **Styling** | Tailwind CSS | UI styling |
+| **Styling** | Plain CSS | UI styling (grayscale) |
 | **Terminal** | xterm.js | Web shell access |
-| **Container** | Docker + Kubernetes | Deployment |
 | **Testing** | Go testing + Vitest | Unit tests |
 | **E2E** | Playwright | Integration tests |
 
@@ -66,49 +65,52 @@ cloudpass/
 │   │   ├── handlers/
 │   │   │   ├── instance.go
 │   │   │   ├── network.go
-│   │   │   ├── terminal.go
+│   │   │   ├── image.go
+│   │   │   ├── jobs.go
+│   │   │   ├── job_storage.go
+│   │   │   ├── job_events.go
+│   │   │   ├── config.go
 │   │   │   └── health.go
 │   │   ├── middleware/
 │   │   │   ├── ip_whitelist.go
 │   │   │   └── logging.go
 │   │   ├── multipass/
 │   │   │   ├── client.go
-│   │   │   ├── executor.go
-│   │   │   └── parser.go
+│   │   │   └── ssh.go
 │   │   ├── models/
-│   │   │   └── instance.go
+│   │   │   ├── instance.go
+│   │   │   └── job.go
+│   │   ├── logger/
+│   │   │   └── logger.go
+│   │   ├── web/
+│   │   │   ├── web.go           # UI embed (production)
+│   │   │   └── web_ci.go        # CI stub
 │   │   └── websocket/
-│   │       ├── hub.go
 │   │       └── terminal.go
+│   ├── internal/web/build/       # Embedded UI (generated)
 │   ├── go.mod
 │   ├── go.sum
-│   ├── Dockerfile
 │   └── config.yaml
 ├── ui/                           # Svelte frontend
 │   ├── src/
 │   │   ├── lib/
 │   │   │   ├── components/       # Reusable UI components
-│   │   │   ├── services/        # API client
-│   │   │   ├── stores/          # Svelte stores
-│   │   │   └── types/           # TypeScript types
-│   │   ├── routes/              # SvelteKit pages
-│   │   │   ├── +page.svelte
-│   │   │   ├── instances/
-│   │   │   └── settings/
-│   │   └── app.html
+│   │   │   ├── services/         # API client
+│   │   │   ├── stores/           # Svelte stores
+│   │   │   └── types/            # TypeScript types
+│   │   └── routes/               # SvelteKit pages
+│   │       ├── +page.svelte
+│   │       ├── instances/
+│   │       ├── networks/
+│   │       └── settings/
 │   ├── static/
 │   ├── package.json
 │   ├── svelte.config.js
 │   ├── vite.config.ts
-│   ├── tailwind.config.js
 │   ├── tsconfig.json
-│   ├── Dockerfile
 │   └── .eslintrc.cjs
-├── docker-compose.yml
-├── kubernetes/
-│   ├── deployment.yaml
-│   ├── service.yaml
-│   └── configmap.yaml
+├── build.sh                      # Binary build script
+├── release.sh                    # Release automation
 ├── .github/
 │   └── workflows/
 │       ├── ci.yml
@@ -116,7 +118,6 @@ cloudpass/
 ├── README.md
 ├── CONTRIBUTING.md
 ├── AGENTS.md
-├── LICENSE
 └── PROJECT_PLAN.md
 ```
 
@@ -148,6 +149,8 @@ http://localhost:8080/api
 | `GET` | `/networks` | List available networks | 1 |
 | `POST` | `/networks` | Create network bridge | 2 |
 | `DELETE` | `/networks/:name` | Delete network | 2 |
+| `GET` | `/jobs` | List all jobs | 1 |
+| `GET` | `/jobs/:id` | Get job status | 1 |
 | `POST` | `/instances/:name/export` | Export VM | 3 |
 | `POST` | `/instances/import` | Import VM | 3 |
 | `POST` | `/instances/:name/snapshots` | Create snapshot | 3 |

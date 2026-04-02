@@ -102,9 +102,9 @@ docs(api): update endpoint documentation
 
 **Commands:**
 ```bash
-golangci-lint run ./...
+golangci-lint run --build-tags ci ./...
 gofmt -w .
-go test ./...
+go test -tags ci ./...
 ```
 
 ### Svelte/TypeScript (Frontend)
@@ -137,8 +137,8 @@ npm run build
 
 | Check | Command |
 |--------|---------|
-| Go tests | `go test ./...` |
-| Go lint | `golangci-lint run ./...` |
+| Go tests | `go test -tags ci ./...` |
+| Go lint | `golangci-lint run --build-tags ci ./...` |
 | Go format | `gofmt -d .` |
 | TS tests | `npm run test` |
 | ESLint | `npm run lint` |
