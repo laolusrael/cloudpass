@@ -820,76 +820,66 @@ func TestCreateInstance_DuplicateName(t *testing.T) {
 
 ## 10. Deployment
 
-### 10.1 Docker
+### 10.1 Binary Release
 
-```dockerfile
-# api/Dockerfile
-FROM golang:1.21-alpine AS builder
-WORKDIR /app
-COPY go.mod go.sum ./
-RUN go mod download
-COPY . .
-RUN CGO_ENABLED=0 GOOS=linux go build -o /server ./cmd/server
+CloudPass is distributed as self-contained binaries for Linux, macOS, and Windows.
 
-FROM alpine:latest
-RUN apk --no-cache add ca-certificates
-COPY --from=builder /server /server
-COPY config.yaml /etc/cloudpass/config.yaml
-EXPOSE 8080
-ENTRYPOINT ["/server"]
+```bash
+# Download from GitHub Releases
+# https://github.com/laolusrael/cloudpass/releases
+
+# Or build from source
+./build.sh
+
+# Run
+./cloudpass
 ```
 
-```dockerfile
-# ui/Dockerfile
-FROM node:20-alpine AS builder
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci
-COPY . .
-RUN npm run build
+### 10.2 Nginx Reverse Proxy
 
-FROM nginx:alpine
-COPY --from=builder /app/build /usr/share/nginx/html
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
+For production deployment, use nginx as a reverse proxy:
+
+```nginx
+server {
+    listen 80;
+    server_name cloudpass.example.com;
+
+    # WebSocket support
+    location /api/ {
+        proxy_pass http://localhost:8080/;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    # Static UI files
+    location / {
+        root /opt/cloudpass/api/internal/web/build;
+        try_files $uri $uri/ /index.html;
+    }
+}
 ```
 
-### 10.2 Kubernetes
+### 10.3 Systemd Service
 
-```yaml
-# kubernetes/deployment.yaml
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: cloudpass
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app: cloudpass
-  template:
-    spec:
-      containers:
-      - name: api
-        image: cloudpass/api:latest
-        ports:
-        - containerPort: 8080
-        volumeMounts:
-        - name: config
-          mountPath: /etc/cloudpass
-        - name: multipass-socket
-          mountPath: /var/run/multipass
-      - name: ui
-        image: cloudpass/ui:latest
-        ports:
-        - containerPort: 80
-      volumes:
-      - name: config
-        configMap:
-          name: cloudpass-config
-      - name: multipass-socket
-        hostPath:
-          path: /var/run/multipass
+```ini
+# /etc/systemd/system/cloudpass.service
+[Unit]
+Description=CloudPass - Multipass Management UI
+After=network.target
+
+[Service]
+Type=simple
+User=cloudpass
+Group=cloudpass
+WorkingDirectory=/opt/cloudpass
+ExecStart=/opt/cloudpass/cloudpass
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
 ```
 
 ---
@@ -912,6 +902,8 @@ spec:
 | `/api/networks` | GET | List networks |
 | `/api/networks` | POST | Create network |
 | `/api/networks/:name` | DELETE | Delete network |
+| `/api/jobs` | GET | List jobs |
+| `/api/jobs/:id` | GET | Get job status |
 
 ---
 
