@@ -172,7 +172,9 @@ function Setup-MultipassAuth {
         Set-Content -Path $configPath -Value $configContent
     }
 
-    # Set environment variable for current user (will apply to service if it runs as that user)
+    # Set environment variable for the CloudPass user (services inherit user env vars)
+    # Also set at Machine level as fallback
+    [Environment]::SetEnvironmentVariable("CLOUDPASS_MULTIPASS_PASS", $passphrase, [EnvironmentVariableTarget]::User)
     [Environment]::SetEnvironmentVariable("CLOUDPASS_MULTIPASS_PASS", $passphrase, [EnvironmentVariableTarget]::Machine)
 
     Write-Info "Multipass authentication configured"

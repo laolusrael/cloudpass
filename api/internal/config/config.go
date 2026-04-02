@@ -235,6 +235,10 @@ func Load(path string) (*Config, error) {
 
 	if cfg.Multipass.PassphraseEnv != "" {
 		cfg.Multipass.Passphrase = os.Getenv(cfg.Multipass.PassphraseEnv)
+		if cfg.Multipass.Passphrase == "" {
+			fmt.Fprintf(os.Stderr, "Warning: passphrase_env '%s' is set but the environment variable is not defined\n", cfg.Multipass.PassphraseEnv)
+			fmt.Fprintf(os.Stderr, "Multipass authentication may fail. Set CLOUDPASS_MULTIPASS_PASS or the configured env var.\n")
+		}
 	}
 
 	if v := os.Getenv("CLOUDPASS_HOST"); v != "" {

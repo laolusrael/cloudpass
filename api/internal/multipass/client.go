@@ -62,7 +62,8 @@ func (c *multipassClient) Authenticate(passphrase string) error {
 	defer cancel()
 
 	logger.Multipass.Debug().Msg("authenticating with multipass")
-	cmd := exec.CommandContext(ctx, "multipass", "authenticate", passphrase)
+	cmd := exec.CommandContext(ctx, "multipass", "authenticate")
+	cmd.Stdin = strings.NewReader(passphrase)
 	_, err := cmd.Output()
 	if err != nil {
 		logger.Multipass.Error().Err(err).Msg("multipass authentication failed")
