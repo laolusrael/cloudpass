@@ -147,35 +147,38 @@ setup_multipass_auth() {
         fi
     fi
 
-    # Set passphrase (non-interactive, pass as argument)
-    # Try as current user, then as original sudo user, then with sudo
+    # Set passphrase - prefer running as the original user (not root)
+    # because multipass set may require interactive input
     info "Setting multipass passphrase..."
     local set_result=""
-    set_result=$(multipass set local.passphrase="$passphrase" 2>&1) && set_result="success" || true
     
-    if [ "$set_result" = "success" ]; then
-        info "Passphrase set successfully"
-    elif echo "$set_result" | grep -q "Please re-enter"; then
-        # Interactive prompt triggered, try as the user who ran sudo
-        if [ -n "$SUDO_USER" ]; then
-            set_result=$(sudo -u "$SUDO_USER" multipass set local.passphrase="$passphrase" 2>&1) && set_result="success" || true
+    # First try as SUDO_USER if available (non-root user is more likely to work)
+    if [ -n "$SUDO_USER" ]; then
+        set_result=$(sudo -u "$SUDO_USER" multipass set local.passphrase="$passphrase" 2>&1) && set_result="success" || true
+        if [ "$set_result" = "success" ]; then
+            info "Passphrase set successfully (as $SUDO_USER)"
+        else
+            warn "Failed as $SUDO_USER, trying as root: $set_result"
+            # Fall back to root if SUDO_USER fails
+            set_result=$(multipass set local.passphrase="$passphrase" 2>&1) && set_result="success" || true
             if [ "$set_result" = "success" ]; then
-                info "Passphrase set successfully (as $SUDO_USER)"
+                info "Passphrase set successfully"
             else
                 warn "Failed to set passphrase: $set_result"
                 print_authentication_guide
                 return 1
             fi
+        fi
+    else
+        # No SUDO_USER, try as current user
+        set_result=$(multipass set local.passphrase="$passphrase" 2>&1) && set_result="success" || true
+        if [ "$set_result" = "success" ]; then
+            info "Passphrase set successfully"
         else
-            warn "Interactive prompt required to set passphrase"
-            warn "Please run: multipass set local.passphrase=$passphrase"
+            warn "Failed to set passphrase: $set_result"
             print_authentication_guide
             return 1
         fi
-    else
-        warn "Failed to set passphrase: $set_result"
-        print_authentication_guide
-        return 1
     fi
 
     info "Configuring CloudPass to use passphrase authentication..."
