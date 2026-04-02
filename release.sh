@@ -26,8 +26,8 @@ if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
 fi
 
 BRANCH=$(git branch --show-current)
-if [ "$BRANCH" != "master" ]; then
-    error "Must be on master branch (current: $BRANCH)"
+if [ "$BRANCH" != "main" ]; then
+    error "Must be on main branch (current: $BRANCH)"
 fi
 
 if [ -n "$(git status --porcelain)" ]; then
