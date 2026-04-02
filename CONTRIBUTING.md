@@ -6,7 +6,10 @@ Thank you for your interest in contributing to CloudPass!
 
 1. Fork the repository
 2. Clone your fork: `git clone https://github.com/YOUR_USERNAME/cloudpass.git`
-3. Create a feature branch: `git checkout -b feature/your-feature`
+3. Create your feature branch (`git checkout -b feature/amazing-feature`)
+4. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+5. Push to the branch (`git push origin feature/amazing-feature`)
+6. Open a Pull Request
 
 ## Development Setup
 
