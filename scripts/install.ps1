@@ -128,6 +128,83 @@ if ($Port -ne 8080) {
     Set-Content -Path $configPath -Value $configContent
 }
 
+# Setup multipass authentication
+function Setup-MultipassAuth {
+    Write-Info "Setting up multipass authentication..."
+
+    try {
+        $null = Get-Command multipass -ErrorAction Stop
+    } catch {
+        Write-Warn "multipass command not found"
+        return $false
+    }
+
+    try {
+        $null = multipass list 2>$null
+        Write-Info "Multipass is already accessible without authentication"
+        return $true
+    } catch {
+        Write-Info "Multipass requires authentication"
+    }
+
+    # Generate passphrase
+    $passphrase = -join ((65..90) + (97..122) + (48..57) | Get-Random -Count 24 | ForEach-Object {[char]$_})
+
+    try {
+        $null = multipass set local.passphrase=$passphrase 2>$null
+        Write-Info "Passphrase set successfully"
+    } catch {
+        Write-Warn "Could not set multipass passphrase automatically"
+        Write-MultipassAuthGuide
+        return $false
+    }
+
+    # Store passphrase directly in config.yaml (Windows doesn't support EnvironmentFile)
+    $configPath = "$InstallDir\config.yaml"
+    if (Test-Path $configPath) {
+        $configContent = Get-Content $configPath -Raw
+        
+        # Add passphrase_env that maps to env var, and also set env for current session
+        if ($configContent -notmatch 'passphrase_env:') {
+            $configContent = $configContent -replace '(multipass:)', "$1`n  passphrase_env: `"CLOUDPASS_MULTIPASS_PASS`""
+        }
+        
+        Set-Content -Path $configPath -Value $configContent
+    }
+
+    # Set environment variable for current user (will apply to service if it runs as that user)
+    [Environment]::SetEnvironmentVariable("CLOUDPASS_MULTIPASS_PASS", $passphrase, [EnvironmentVariableTarget]::Machine)
+
+    Write-Info "Multipass authentication configured"
+    return $true
+}
+
+function Write-MultipassAuthGuide {
+    Write-Host ""
+    Write-Host "================================================================================" -ForegroundColor Yellow
+    Write-Host "WARNING: Could not automatically configure multipass authentication." -ForegroundColor Yellow
+    Write-Host "CloudPass may fail to control instances." -ForegroundColor Yellow
+    Write-Host ""
+    Write-Host "To fix manually:" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "1. As an admin, run:" -ForegroundColor White
+    Write-Host "   multipass set local.passphrase=your_secure_password" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "2. Create environment variable for CloudPass service:" -ForegroundColor White
+    Write-Host "   Run regedit and add to HKLM\SYSTEM\CurrentControlSet\Services\CloudPass\Parameters" -ForegroundColor Gray
+    Write-Host "   Name: CLOUDPASS_MULTIPASS_PASS" -ForegroundColor Gray
+    Write-Host "   Value: your_secure_password" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "3. Update config.yaml multipass section:" -ForegroundColor White
+    Write-Host "   passphrase_env: `"CLOUDPASS_MULTIPASS_PASS`"" -ForegroundColor Gray
+    Write-Host ""
+    Write-Host "4. Restart CloudPass: Restart-Service CloudPass" -ForegroundColor White
+    Write-Host "================================================================================" -ForegroundColor Yellow
+    Write-Host ""
+}
+
+$authResult = Setup-MultipassAuth
+
 # Set ownership
 $acl = Get-Acl $InstallDir
 $userRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
@@ -150,7 +227,7 @@ if ($existingService) {
 
 $binPath = "$InstallDir\cloudpass.exe"
 sc.exe create CloudPass binPath= "$binPath" start= auto DisplayName= "CloudPass" | Out-Null
-sc.exe config CloudPass obj= "NT AUTHORITY\LocalService" | Out-Null
+sc.exe config CloudPass obj= ".\$CloudPassUser" | Out-Null
 Start-Service -Name "CloudPass"
 
 Write-Info ""

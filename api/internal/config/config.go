@@ -36,6 +36,8 @@ type MultipassConfig struct {
 	SocketPath        string `yaml:"socket_path"`
 	DefaultTimeoutSec int    `yaml:"default_timeout_seconds"`
 	SSHKeyPath        string `yaml:"ssh_key_path"`
+	PassphraseEnv     string `yaml:"passphrase_env"`
+	Passphrase        string `yaml:"-"`
 }
 
 type LoggingConfig struct {
@@ -79,6 +81,7 @@ var defaultConfig = Config{
 		SocketPath:        "",
 		DefaultTimeoutSec: 1800,
 		SSHKeyPath:        "",
+		PassphraseEnv:     "",
 	},
 	Logging: LoggingConfig{
 		Level:  "info",
@@ -228,6 +231,10 @@ func Load(path string) (*Config, error) {
 
 	if cfg.Multipass.SocketPath == "" {
 		cfg.Multipass.SocketPath = DetectSocketPath()
+	}
+
+	if cfg.Multipass.PassphraseEnv != "" {
+		cfg.Multipass.Passphrase = os.Getenv(cfg.Multipass.PassphraseEnv)
 	}
 
 	if v := os.Getenv("CLOUDPASS_HOST"); v != "" {

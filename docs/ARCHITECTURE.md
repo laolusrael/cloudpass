@@ -746,6 +746,24 @@ type Config struct {
 | `CLOUDPASS_HOST` | Server host | `0.0.0.0` |
 | `CLOUDPASS_PORT` | Server port | `8080` |
 | `CLOUDPASS_LOG_LEVEL` | Log level | `info` |
+| `CLOUDPASS_MULTIPASS_PASS` | Multipass authentication passphrase | (none) |
+
+#### Multipass Authentication
+
+Multipass requires users to authenticate with the service before executing commands. This is configured via the `passphrase_env` setting in config.yaml, which specifies the name of the environment variable containing the passphrase.
+
+```yaml
+multipass:
+  passphrase_env: "CLOUDPASS_MULTIPASS_PASS"
+```
+
+The service will automatically authenticate with Multipass on startup using the passphrase from the environment variable.
+
+**Linux**: The passphrase is stored in `/etc/default/cloudpass` and loaded via systemd's `EnvironmentFile`.
+
+**Windows**: The passphrase is stored as a system environment variable.
+
+If authentication is not configured, the service will log a warning but may fail to communicate with Multipass.
 
 ---
 

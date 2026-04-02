@@ -15,6 +15,7 @@ import (
 )
 
 type Client interface {
+	Authenticate(passphrase string) error
 	ListInstances() ([]models.Instance, error)
 	GetInstance(name string) (*models.Instance, error)
 	GetInstanceIP(name string) (string, error)
@@ -50,6 +51,26 @@ func NewClient(timeoutSec int) Client {
 	return &multipassClient{
 		timeout: time.Duration(timeoutSec) * time.Second,
 	}
+}
+
+func (c *multipassClient) Authenticate(passphrase string) error {
+	if passphrase == "" {
+		return nil
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	logger.Multipass.Debug().Msg("authenticating with multipass")
+	cmd := exec.CommandContext(ctx, "multipass", "authenticate", passphrase)
+	_, err := cmd.Output()
+	if err != nil {
+		logger.Multipass.Error().Err(err).Msg("multipass authentication failed")
+		return fmt.Errorf("authentication failed: %w", err)
+	}
+
+	logger.Multipass.Info().Msg("multipass authenticated successfully")
+	return nil
 }
 
 func (c *multipassClient) ListInstances() ([]models.Instance, error) {

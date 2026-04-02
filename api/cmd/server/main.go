@@ -79,6 +79,14 @@ func main() {
 
 	mpClient := multipass.NewClient(cfg.Multipass.DefaultTimeoutSec)
 
+	if cfg.Multipass.Passphrase != "" {
+		if err := mpClient.Authenticate(cfg.Multipass.Passphrase); err != nil {
+			log.Warn().Err(err).Msg("multipass authentication failed, will retry on first command")
+		} else {
+			log.Info().Msg("multipass authenticated successfully")
+		}
+	}
+
 	jobStorage, err := handlers.NewJobStorage(filepath.Join(filepath.Dir(configPath), "data"))
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to initialize job storage")

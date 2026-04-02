@@ -105,42 +105,83 @@ if [ "$PORT" != "8080" ]; then
 fi
 
 setup_multipass_auth() {
-    local cert_source=""
-    local cert_dir="/var/snap/multipass/common/data/multipassd/authenticated-certs"
+    info "Setting up multipass authentication..."
+
+    if ! command -v multipass &>/dev/null; then
+        warn "multipass command not found"
+        return 1
+    fi
+
+    if [ -f "$HOME/snap/multipass/common/multipassd.socket" ] || \
+       [ -f "/var/run/multipass_socket" ] || \
+       [ -f "/run/multipass.socket" ]; then
+        info "Multipass socket detected, checking authentication..."
+        
+        if multipass list &>/dev/null; then
+            info "Multipass is already accessible without authentication"
+            return 0
+        fi
+    fi
+
+    local passphrase=$(openssl rand -base64 24 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c 32)
     
-    # Find multipass certificate
-    if [ -f "$HOME/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem" ]; then
-        cert_source="$HOME/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem"
-    elif [ -f "/root/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem" ]; then
-        cert_source="/root/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem"
+    if [ -z "$passphrase" ]; then
+        warn "Could not generate passphrase"
+        return 1
+    fi
+
+    info "Setting multipass passphrase..."
+    if echo "$passphrase" | multipass set local.passphrase 2>/dev/null; then
+        info "Passphrase set successfully"
+    elif echo "$passphrase" | sudo multipass set local.passphrase 2>/dev/null; then
+        info "Passphrase set successfully (via sudo)"
     else
-        warn "Could not find multipass certificate"
-        warn "CloudPass may fail to control instances without authentication"
-        return
+        warn "Could not set multipass passphrase automatically"
+        print_authentication_guide
+        return 1
     fi
+
+    info "Configuring CloudPass to use passphrase authentication..."
+    local config_file="$INSTALL_DIR/config.yaml"
     
-    # Create authenticated-certs directory if needed
-    mkdir -p "$cert_dir"
-    
-    # Add certificate if not already present
-    if ! grep -q "$(cat "$cert_source")" "$cert_dir/multipass_client_certs.pem" 2>/dev/null; then
-        info "Adding cloudpass user to multipass authenticated certificates..."
-        cat "$cert_source" >> "$cert_dir/multipass_client_certs.pem"
-        chmod 0644 "$cert_dir/multipass_client_certs.pem"
-    else
-        info "CloudPass certificate already exists in multipass authenticated certificates"
+    if [ -f "$config_file" ]; then
+        if grep -q "passphrase_env:" "$config_file" 2>/dev/null; then
+            sed -i 's/passphrase_env:.*/passphrase_env: "CLOUDPASS_MULTIPASS_PASS"/' "$config_file"
+        else
+            sed -i '/^multipass:/a\  passphrase_env: "CLOUDPASS_MULTIPASS_PASS"' "$config_file"
+        fi
     fi
-    
-    # Restart multipass to apply changes
-    info "Restarting multipass service..."
-    if command -v snap &>/dev/null; then
-        snap restart multipass 2>/dev/null || true
-    fi
-    
-    # Wait for multipass to be ready
-    sleep 2
-    
+
+    local env_file="/etc/default/cloudpass"
+    info "Creating environment file at $env_file..."
+    echo "CLOUDPASS_MULTIPASS_PASS=$passphrase" > "$env_file"
+    chown root:root "$env_file"
+    chmod 600 "$env_file"
+
     info "Multipass authentication configured"
+    return 0
+}
+
+print_authentication_guide() {
+    echo ""
+    echo "================================================================================"
+    warn "WARNING: Could not automatically configure multipass authentication."
+    warn "CloudPass may fail to control instances."
+    echo ""
+    echo "To fix manually:"
+    echo ""
+    echo "1. As a user with multipass access, run:"
+    echo "   multipass set local.passphrase=your_secure_password"
+    echo ""
+    echo "2. Create /etc/default/cloudpass with:"
+    echo "   CLOUDPASS_MULTIPASS_PASS=your_secure_password"
+    echo ""
+    echo "3. Update config.yaml multipass section:"
+    echo "   passphrase_env: \"CLOUDPASS_MULTIPASS_PASS\""
+    echo ""
+    echo "4. Restart CloudPass: sudo systemctl restart cloudpass"
+    echo "================================================================================"
+    echo ""
 }
 
 setup_multipass_auth
@@ -160,8 +201,9 @@ Wants=network.target
 Type=simple
 User=$CLOUDPASS_USER
 Group=$CLOUDPASS_GROUP
+EnvironmentFile=/etc/default/cloudpass
 WorkingDirectory=$INSTALL_DIR
-ExecStart=$INSTALL_DIR/cloudpass
+ExecStart=$INSTALL_DIR/cloudpass -config $INSTALL_DIR/config.yaml
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
