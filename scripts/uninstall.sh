@@ -37,6 +37,11 @@ if [ -f /etc/systemd/system/cloudpass.service ]; then
     systemctl daemon-reload
 fi
 
+if [ -f /etc/sudoers.d/cloudpass-multipass ]; then
+    info "Removing sudo permissions..."
+    rm -f /etc/sudoers.d/cloudpass-multipass
+fi
+
 if [ -d "$INSTALL_DIR" ]; then
     info "Removing installation directory..."
     rm -rf "$INSTALL_DIR"

@@ -104,6 +104,45 @@ if [ "$PORT" != "8080" ]; then
     sed -i "s/port: 8080/port: $PORT/" "$INSTALL_DIR/config.yaml"
 fi
 
+setup_sudo_permissions() {
+    local multipass_path
+    
+    # Find multipass binary
+    if command -v multipass &>/dev/null; then
+        multipass_path=$(which multipass)
+    elif [ -x /snap/bin/multipass ]; then
+        multipass_path="/snap/bin/multipass"
+    elif [ -x /usr/bin/multipass ]; then
+        multipass_path="/usr/bin/multipass"
+    else
+        warn "Could not find multipass - sudo permissions not configured"
+        warn "CloudPass may fail to control instances without proper permissions"
+        return
+    fi
+    
+    info "Configuring sudo permissions for cloudpass user..."
+    
+    cat > /etc/sudoers.d/cloudpass-multipass << EOF
+# CloudPass sudo permissions for multipass CLI
+cloudpass ALL=(root) NOPASSWD: $multipass_path list
+cloudpass ALL=(root) NOPASSWD: $multipass_path info *
+cloudpass ALL=(root) NOPASSWD: $multipass_path start *
+cloudpass ALL=(root) NOPASSWD: $multipass_path stop *
+cloudpass ALL=(root) NOPASSWD: $multipass_path delete *
+cloudpass ALL=(root) NOPASSWD: $multipass_path launch *
+cloudpass ALL=(root) NOPASSWD: $multipass_path suspend *
+cloudpass ALL=(root) NOPASSWD: $multipass_path resume *
+cloudpass ALL=(root) NOPASSWD: $multipass_path images
+cloudpass ALL=(root) NOPASSWD: $multipass_path networks
+cloudpass ALL=(root) NOPASSWD: $multipass_path create *
+EOF
+    
+    chmod 0440 /etc/sudoers.d/cloudpass-multipass
+    info "Sudo permissions configured"
+}
+
+setup_sudo_permissions
+
 info "Setting ownership..."
 chown -R "$CLOUDPASS_USER:$CLOUDPASS_GROUP" "$INSTALL_DIR"
 chown -R "$CLOUDPASS_USER:$CLOUDPASS_GROUP" "$SSH_KEY_DIR"
