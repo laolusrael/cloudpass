@@ -13,7 +13,7 @@ func TestIPWhitelist_EmptyAllowedList(t *testing.T) {
 	e := echo.New()
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		if he, ok := err.(*echo.HTTPError); ok {
-			c.JSON(he.Code, he.Message)
+			_ = c.JSON(he.Code, he.Message)
 		}
 	}
 
@@ -37,7 +37,7 @@ func TestIPWhitelist_AllowedCIDR(t *testing.T) {
 	e := echo.New()
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		if he, ok := err.(*echo.HTTPError); ok {
-			c.JSON(he.Code, he.Message)
+			_ = c.JSON(he.Code, he.Message)
 		}
 	}
 
@@ -62,7 +62,7 @@ func TestIPWhitelist_BlockedIP(t *testing.T) {
 	e := echo.New()
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		if he, ok := err.(*echo.HTTPError); ok {
-			c.JSON(he.Code, he.Message)
+			_ = c.JSON(he.Code, he.Message)
 		}
 	}
 
@@ -87,7 +87,7 @@ func TestIPWhitelist_MultipleCIDRs_Allowed(t *testing.T) {
 	e := echo.New()
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		if he, ok := err.(*echo.HTTPError); ok {
-			c.JSON(he.Code, he.Message)
+			_ = c.JSON(he.Code, he.Message)
 		}
 	}
 
@@ -112,7 +112,7 @@ func TestIPWhitelist_MultipleCIDRs_Blocked(t *testing.T) {
 	e := echo.New()
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		if he, ok := err.(*echo.HTTPError); ok {
-			c.JSON(he.Code, he.Message)
+			_ = c.JSON(he.Code, he.Message)
 		}
 	}
 
@@ -137,7 +137,7 @@ func TestIPWhitelist_EmptyRemoteAddr(t *testing.T) {
 	e := echo.New()
 	e.HTTPErrorHandler = func(err error, c echo.Context) {
 		if he, ok := err.(*echo.HTTPError); ok {
-			c.JSON(he.Code, he.Message)
+			_ = c.JSON(he.Code, he.Message)
 		}
 	}
 

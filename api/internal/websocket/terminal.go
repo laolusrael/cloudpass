@@ -65,7 +65,7 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 		log.Error().Err(err).Msg("failed to accept websocket")
 		return err
 	}
-	defer conn.CloseNow()
+	defer func() { _ = conn.CloseNow() }()
 
 	log.Debug().Str("instance", name).Str("ip", ip).Msg("WebSocket terminal connection started")
 
@@ -75,10 +75,12 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 	sshClient := multipass.NewSSHClient(30)
 	if err := sshClient.Connect(h.sshKeyPath, ip, 30); err != nil {
 		log.Error().Err(err).Str("ip", ip).Msg("failed to SSH connect")
-		wsjson.Write(ctx, conn, map[string]string{
+		if err := wsjson.Write(ctx, conn, map[string]string{
 			"type": "error",
 			"data": fmt.Sprintf("failed to connect via SSH: %v", err),
-		})
+		}); err != nil {
+			log.Debug().Err(err).Msg("failed to write error to websocket")
+		}
 		return nil
 	}
 	defer sshClient.Close()
@@ -88,10 +90,12 @@ func (h *TerminalHandler) HandleTerminal(c echo.Context) error {
 	session, err := sshClient.OpenTerminal(24, 80)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to open terminal session")
-		wsjson.Write(ctx, conn, map[string]string{
+		if err := wsjson.Write(ctx, conn, map[string]string{
 			"type": "error",
 			"data": fmt.Sprintf("failed to open terminal: %v", err),
-		})
+		}); err != nil {
+			log.Debug().Err(err).Msg("failed to write error to websocket")
+		}
 		return nil
 	}
 	defer session.Close()

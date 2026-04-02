@@ -163,7 +163,10 @@ func EnsureConfig(path string, reset bool) (*Config, error) {
 		fmt.Printf("Config file exists at %s\n", absPath)
 		fmt.Print("Reset to defaults? [y/N]: ")
 		var response string
-		fmt.Scanln(&response)
+		if _, err := fmt.Scanln(&response); err != nil {
+			fmt.Println("Aborted.")
+			os.Exit(0)
+		}
 		if strings.ToLower(response) != "y" && strings.ToLower(response) != "yes" {
 			fmt.Println("Aborted.")
 			os.Exit(0)
