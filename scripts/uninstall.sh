@@ -37,6 +37,16 @@ if [ -f /etc/systemd/system/cloudpass.service ]; then
     systemctl daemon-reload
 fi
 
+if [ -f /etc/default/cloudpass ]; then
+    info "Removing cloudpass environment file..."
+    rm -f /etc/default/cloudpass
+fi
+
+if [ -d /home/cloudpass ]; then
+    info "Removing cloudpass home directory..."
+    rm -rf /home/cloudpass
+fi
+
 if [ -f /etc/sudoers.d/cloudpass-multipass ]; then
     info "Removing sudo permissions..."
     rm -f /etc/sudoers.d/cloudpass-multipass

@@ -163,6 +163,14 @@ setup_multipass_auth() {
     chown root:root "$env_file"
     chmod 600 "$env_file"
 
+    info "Authenticating cloudpass user with multipass..."
+    if sudo -u "$CLOUDPASS_USER" multipass authenticate "$passphrase" 2>/dev/null; then
+        info "cloudpass user authenticated successfully"
+    else
+        warn "Could not authenticate cloudpass user automatically"
+        warn "CloudPass service may fail to communicate with multipass"
+    fi
+
     info "Multipass authentication configured"
     return 0
 }
