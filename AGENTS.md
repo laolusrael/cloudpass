@@ -217,7 +217,7 @@ npm run build
 | Go packages | lowercase | `handlers`, `models` |
 | Svelte files | kebab-case | `instance-list.svelte` |
 | TypeScript files | kebab-case | `api-client.ts` |
-| Config files | lowercase | `docker-compose.yml` |
+| Config files | lowercase | `config.yaml` |
 | Test files | `_test.go` / `.test.ts` | `client_test.go` |
 
 ---
