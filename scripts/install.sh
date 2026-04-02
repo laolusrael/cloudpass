@@ -45,6 +45,7 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+BASE_DIR="$(dirname "$SCRIPT_DIR")"
 INSTALL_DIR="/opt/cloudpass"
 CLOUDPASS_USER="cloudpass"
 CLOUDPASS_GROUP="cloudpass"
@@ -54,12 +55,17 @@ SSH_KEY_TARGET="$SSH_KEY_DIR/multipass_id_rsa"
 
 info "Installing CloudPass..."
 
-if [ ! -f "$SCRIPT_DIR/cloudpass" ]; then
-    error "cloudpass binary not found in $SCRIPT_DIR. Please build or extract the release first."
+# Check for cloudpass binary in script directory or base directory
+if [ -f "$SCRIPT_DIR/cloudpass" ]; then
+    SOURCE_DIR="$SCRIPT_DIR"
+elif [ -f "$BASE_DIR/cloudpass" ]; then
+    SOURCE_DIR="$BASE_DIR"
+else
+    error "cloudpass binary not found. Please extract the release first."
 fi
 
-if [ ! -f "$SCRIPT_DIR/config.yaml" ]; then
-    error "config.yaml not found in $SCRIPT_DIR. Please ensure it exists."
+if [ ! -f "$SOURCE_DIR/config.yaml" ]; then
+    error "config.yaml not found. Please extract the release first."
 fi
 
 if id "$CLOUDPASS_USER" &>/dev/null; then
@@ -76,8 +82,8 @@ mkdir -p "$INSTALL_DIR"
 mkdir -p "$SSH_KEY_DIR"
 
 info "Copying files..."
-cp "$SCRIPT_DIR/cloudpass" "$INSTALL_DIR/"
-cp "$SCRIPT_DIR/config.yaml" "$INSTALL_DIR/"
+cp "$SOURCE_DIR/cloudpass" "$INSTALL_DIR/"
+cp "$SOURCE_DIR/config.yaml" "$INSTALL_DIR/"
 
 if [ -f "$SSH_KEY_SOURCE" ]; then
     info "Copying SSH key..."

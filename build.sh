@@ -84,17 +84,15 @@ create_release "darwin-amd64" darwin amd64
 create_release "darwin-arm64" darwin arm64
 create_release "windows-amd64" windows amd64
 
-# Create archives
+# Create archives - archive the FOLDER itself so extraction creates the folder
 echo ">>> Creating tarballs..."
-tar -czvf "cloudpass-$VERSION-linux-arm64.tar.gz" -C release-linux-arm64 .
-tar -czvf "cloudpass-$VERSION-linux-amd64.tar.gz" -C release-linux-amd64 .
-tar -czvf "cloudpass-$VERSION-darwin-amd64.tar.gz" -C release-darwin-amd64 .
-tar -czvf "cloudpass-$VERSION-darwin-arm64.tar.gz" -C release-darwin-arm64 .
+tar -czvf "cloudpass-$VERSION-linux-arm64.tar.gz" release-linux-arm64
+tar -czvf "cloudpass-$VERSION-linux-amd64.tar.gz" release-linux-amd64
+tar -czvf "cloudpass-$VERSION-darwin-arm64.tar.gz" release-darwin-arm64
+tar -czvf "cloudpass-$VERSION-darwin-amd64.tar.gz" release-darwin-amd64
 
 echo ">>> Creating zip..."
-cd release-windows-amd64
-zip -q -r "../cloudpass-$VERSION-windows-amd64.zip" .
-cd ..
+zip -q -r "cloudpass-$VERSION-windows-amd64.zip" release-windows-amd64
 
 # Setup local binary BEFORE cleaning up
 echo ">>> Setup local binary..."

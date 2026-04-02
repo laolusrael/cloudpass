@@ -49,6 +49,7 @@ if ($Port -lt 1 -or $Port -gt 65535) {
 }
 
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+$BaseDir = Split-Path -Parent $ScriptDir
 $InstallDir = "C:\Program Files\CloudPass"
 $CloudPassUser = "CloudPass"
 $SSHKeySource = "C:\Windows\System32\config\systemprofile\AppData\Roaming\multipassd\ssh-keys\id_rsa"
@@ -57,13 +58,18 @@ $SSHKeyTarget = "$SSHKeyDir\id_rsa"
 
 Write-Info "Installing CloudPass..."
 
-# Check required files
+# Check for cloudpass.exe in script directory or base directory
+$SourceDir = $ScriptDir
 if (-not (Test-Path "$ScriptDir\cloudpass.exe")) {
-    Write-Error "cloudpass.exe not found in $ScriptDir. Please build or extract the release first."
+    if (Test-Path "$BaseDir\cloudpass.exe") {
+        $SourceDir = $BaseDir
+    } else {
+        Write-Error "cloudpass.exe not found. Please extract the release first."
+    }
 }
 
-if (-not (Test-Path "$ScriptDir\config.yaml")) {
-    Write-Error "config.yaml not found in $ScriptDir. Please ensure it exists."
+if (-not (Test-Path "$SourceDir\config.yaml")) {
+    Write-Error "config.yaml not found. Please extract the release first."
 }
 
 # Create CloudPass user if not exists
@@ -87,8 +93,8 @@ New-Item -ItemType Directory -Force -Path $InstallDir | Out-Null
 
 # Copy files
 Write-Info "Copying files..."
-Copy-Item "$ScriptDir\cloudpass.exe" "$InstallDir\" -Force
-Copy-Item "$ScriptDir\config.yaml" "$InstallDir\" -Force
+Copy-Item "$SourceDir\cloudpass.exe" "$InstallDir\" -Force
+Copy-Item "$SourceDir\config.yaml" "$InstallDir\" -Force
 
 # Copy SSH key if it exists
 if (Test-Path $SSHKeySource) {
