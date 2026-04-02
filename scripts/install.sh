@@ -128,8 +128,12 @@ setup_multipass_auth() {
         fi
     fi
 
-    # Check if passphrase already exists
-    local existing_pass=$(multipass get local.passphrase 2>/dev/null || echo "")
+    # Check if passphrase already exists (if user is already authenticated)
+    local existing_pass=""
+    if multipass get local.passphrase 2>/dev/null; then
+        existing_pass=$(multipass get local.passphrase 2>/dev/null || echo "")
+    fi
+    
     if [ -n "$existing_pass" ]; then
         info "Using existing multipass passphrase"
         passphrase="$existing_pass"
@@ -143,13 +147,33 @@ setup_multipass_auth() {
         fi
     fi
 
+    # Set passphrase (non-interactive, pass as argument)
+    # Try as current user, then as original sudo user, then with sudo
     info "Setting multipass passphrase..."
-    if multipass set local.passphrase="$passphrase" 2>&1; then
+    local set_result=""
+    set_result=$(multipass set local.passphrase="$passphrase" 2>&1) && set_result="success" || true
+    
+    if [ "$set_result" = "success" ]; then
         info "Passphrase set successfully"
-    elif sudo multipass set local.passphrase="$passphrase" 2>&1; then
-        info "Passphrase set successfully (via sudo)"
+    elif echo "$set_result" | grep -q "Please re-enter"; then
+        # Interactive prompt triggered, try as the user who ran sudo
+        if [ -n "$SUDO_USER" ]; then
+            set_result=$(sudo -u "$SUDO_USER" multipass set local.passphrase="$passphrase" 2>&1) && set_result="success" || true
+            if [ "$set_result" = "success" ]; then
+                info "Passphrase set successfully (as $SUDO_USER)"
+            else
+                warn "Failed to set passphrase: $set_result"
+                print_authentication_guide
+                return 1
+            fi
+        else
+            warn "Interactive prompt required to set passphrase"
+            warn "Please run: multipass set local.passphrase=$passphrase"
+            print_authentication_guide
+            return 1
+        fi
     else
-        warn "Could not set multipass passphrase automatically"
+        warn "Failed to set passphrase: $set_result"
         print_authentication_guide
         return 1
     fi
