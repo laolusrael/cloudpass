@@ -36,6 +36,10 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
+if [[ ! "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
+    error "Invalid port: $PORT. Port must be between 1 and 65535"
+fi
+
 if [ "$EUID" -ne 0 ]; then
     error "This script must be run as root (use sudo)"
 fi
@@ -49,6 +53,14 @@ SSH_KEY_DIR="/home/$CLOUDPASS_USER/.cloudpass"
 SSH_KEY_TARGET="$SSH_KEY_DIR/multipass_id_rsa"
 
 info "Installing CloudPass..."
+
+if [ ! -f "$SCRIPT_DIR/cloudpass" ]; then
+    error "cloudpass binary not found in $SCRIPT_DIR. Please build or extract the release first."
+fi
+
+if [ ! -f "$SCRIPT_DIR/config.yaml" ]; then
+    error "config.yaml not found in $SCRIPT_DIR. Please ensure it exists."
+fi
 
 if id "$CLOUDPASS_USER" &>/dev/null; then
     warn "User $CLOUDPASS_USER already exists"

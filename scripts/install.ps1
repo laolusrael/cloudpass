@@ -1,9 +1,19 @@
 # CloudPass Windows Service Installation Script
-# Usage: .\install.ps1 [-Port <int>]
+# Usage: .\install.ps1 [-Port <int>] [-Help]
 
 param(
-    [int]$Port = 8080
+    [int]$Port = 8080,
+    [switch]$Help
 )
+
+if ($Help) {
+    Write-Host "Usage: .\install.ps1 [-Port <port>]" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Options:" -ForegroundColor Cyan
+    Write-Host "  -Port <port>    Port to run CloudPass on (default: 8080)" -ForegroundColor Cyan
+    Write-Host "  -Help           Show this help message" -ForegroundColor Cyan
+    exit 0
+}
 
 $ErrorActionPreference = "Stop"
 
@@ -33,6 +43,11 @@ if (-not (Test-Admin)) {
     Write-Error "This script must be run as Administrator"
 }
 
+# Validate port
+if ($Port -lt 1 -or $Port -gt 65535) {
+    Write-Error "Invalid port: $Port. Port must be between 1 and 65535"
+}
+
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $InstallDir = "C:\Program Files\CloudPass"
 $CloudPassUser = "CloudPass"
@@ -41,6 +56,15 @@ $SSHKeyDir = "$InstallDir\.cloudpass"
 $SSHKeyTarget = "$SSHKeyDir\id_rsa"
 
 Write-Info "Installing CloudPass..."
+
+# Check required files
+if (-not (Test-Path "$ScriptDir\cloudpass.exe")) {
+    Write-Error "cloudpass.exe not found in $ScriptDir. Please build or extract the release first."
+}
+
+if (-not (Test-Path "$ScriptDir\config.yaml")) {
+    Write-Error "config.yaml not found in $ScriptDir. Please ensure it exists."
+}
 
 # Create CloudPass user if not exists
 try {
@@ -120,7 +144,7 @@ if ($existingService) {
 
 $binPath = "$InstallDir\cloudpass.exe"
 sc.exe create CloudPass binPath= "$binPath" start= auto DisplayName= "CloudPass" | Out-Null
-sc.exe config CloudPass obj= "$env:COMPUTERNAME\$CloudPassUser" | Out-Null
+sc.exe config CloudPass obj= "NT AUTHORITY\LocalService" | Out-Null
 Start-Service -Name "CloudPass"
 
 Write-Info ""
