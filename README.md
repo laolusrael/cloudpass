@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="docs/logo.png" alt="CloudPass Logo" width="200">
-</p>
-
 <h1 align="center">CloudPass</h1>
 
 <p align="center">
