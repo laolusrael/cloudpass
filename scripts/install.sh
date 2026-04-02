@@ -128,17 +128,25 @@ setup_multipass_auth() {
         fi
     fi
 
-    local passphrase=$(openssl rand -base64 24 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c 32)
-    
-    if [ -z "$passphrase" ]; then
-        warn "Could not generate passphrase"
-        return 1
+    # Check if passphrase already exists
+    local existing_pass=$(multipass get local.passphrase 2>/dev/null || echo "")
+    if [ -n "$existing_pass" ]; then
+        info "Using existing multipass passphrase"
+        passphrase="$existing_pass"
+    else
+        info "Generating new passphrase..."
+        passphrase=$(openssl rand -base64 24 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c 32)
+        
+        if [ -z "$passphrase" ]; then
+            warn "Could not generate passphrase"
+            return 1
+        fi
     fi
 
     info "Setting multipass passphrase..."
-    if multipass set local.passphrase="$passphrase" 2>/dev/null; then
+    if multipass set local.passphrase="$passphrase" 2>&1; then
         info "Passphrase set successfully"
-    elif sudo multipass set local.passphrase="$passphrase" 2>/dev/null; then
+    elif sudo multipass set local.passphrase="$passphrase" 2>&1; then
         info "Passphrase set successfully (via sudo)"
     else
         warn "Could not set multipass passphrase automatically"
