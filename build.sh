@@ -96,6 +96,11 @@ cd release-windows-amd64
 zip -q -r "../cloudpass-$VERSION-windows-amd64.zip" .
 cd ..
 
+# Setup local binary BEFORE cleaning up
+echo ">>> Setup local binary..."
+cp cloudpass-linux-amd64 cloudpass
+chmod +x cloudpass
+
 # Cleanup release directories
 rm -rf release-linux-arm64 release-linux-amd64 release-darwin-amd64 release-darwin-arm64 release-windows-amd64
 
@@ -103,10 +108,6 @@ rm -rf release-linux-arm64 release-linux-amd64 release-darwin-amd64 release-darw
 rm -f cloudpass-linux-*
 rm -f cloudpass-darwin-*
 rm -f cloudpass-windows-*
-
-echo ">>> Setup local binary..."
-cp cloudpass-linux-amd64 cloudpass
-chmod +x cloudpass
 
 echo "=== Build Complete ==="
 echo "Archives created:"
