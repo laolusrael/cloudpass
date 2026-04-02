@@ -27,90 +27,89 @@
 ### Prerequisites
 
 - [Multipass](https://multipass.run/) installed on the server
-- Go 1.25+ (for development)
-- Node.js 20+ (for frontend development)
 
-### Quick Start
+### 1. Download
 
-#### Option 1: Pre-built Binary
+Download the latest release from [GitHub Releases](https://github.com/laolusrael/cloudpass/releases)
 
-```bash
-# Clone the repository
-git clone https://github.com/laolusrael/cloudpass.git
-cd cloudpass
+### 2. Run
 
-# Download the latest release for your platform
-# Visit: https://github.com/laolusrael/cloudpass/releases
-
-# Or build from source
-./build.sh
-
-# Start the server
-./cloudpass
-
-# Access the UI
-# http://localhost:8080
-```
-
-#### Option 2: Build from Source
+Extract the archive and run:
 
 ```bash
-# Clone the repository
-git clone https://github.com/laolusrael/cloudpass.git
-cd cloudpass
-
-# Build the API
-cd api
-go build -o cloudpass ./cmd/server
-cd ..
-
-# Build the Frontend
-cd ui
-npm install
-npm run build
-cd ..
-
-# Copy frontend build to API
-cp -r ui/build api/internal/web/build
-
-# Start the server
-./api/cloudpass
-```
-
-### Deployment
-
-#### Option 1: Binary Release
-
-1. Download the latest release from [GitHub Releases](https://github.com/laolusrael/cloudpass/releases)
-2. Extract the archive
-3. Configure `config.yaml` as needed
-4. Run `./cloudpass`
-
-#### Option 2: Build from Source
-
-```bash
-# Build API and UI
-./build.sh
-
-# Configure
-# Edit config.yaml as needed
-
-# Run the server
+# Linux
+tar -xzf cloudpass-VERSION-linux-amd64.tar.gz
+cd cloudpass-VERSION-linux-amd64
 ./cloudpass
 ```
 
-#### Option 3: With Nginx Reverse Proxy
+```powershell
+# Windows
+Expand-Archive cloudpass-VERSION-windows-amd64.zip -DestinationPath cloudpass
+cd cloudpass
+.\cloudpass.exe
+```
 
-1. **Build and run CloudPass** (as above)
-2. **Install nginx**
-3. **Configure nginx** to proxy API and serve static files:
+Access the UI at: **http://localhost:8080**
+
+---
+
+## Installation
+
+### Linux (systemd)
+
+Install CloudPass as a systemd service for automatic startup:
+
+```bash
+# Extract the archive
+tar -xzf cloudpass-VERSION-linux-amd64.tar.gz
+cd cloudpass-VERSION-linux-amd64
+
+# Install with default port (8080)
+sudo ./scripts/install.sh
+
+# Or specify a custom port
+sudo ./scripts/install.sh --port 9000
+```
+
+**Uninstall:**
+
+```bash
+sudo ./scripts/uninstall.sh
+```
+
+### Windows (Service)
+
+Install CloudPass as a Windows service for automatic startup:
+
+```powershell
+# Extract the archive
+Expand-Archive cloudpass-VERSION-windows-amd64.zip -DestinationPath cloudpass
+cd cloudpass
+
+# Install with default port (8080)
+.\scripts\install.ps1
+
+# Or specify a custom port
+.\scripts\install.ps1 -Port 9000
+```
+
+**Uninstall:**
+
+```powershell
+.\scripts\uninstall.ps1
+```
+
+### Advanced
+
+#### Nginx Reverse Proxy
 
 ```nginx
 server {
     listen 80;
     server_name your-server;
 
-    # API proxy
+    # API proxy (WebSocket support)
     location /api/ {
         proxy_pass http://localhost:8080/;
         proxy_http_version 1.1;
@@ -127,39 +126,58 @@ server {
 }
 ```
 
-4. **Create systemd service** (optional):
+---
 
-### Manual Setup
+## SSH Key Setup
 
-#### Backend
+For terminal access to instances, CloudPass needs the Multipass SSH private key.
+
+> **Note:** The install scripts (`install.sh` and `install.ps1`) automatically copy the SSH key during installation. You only need manual setup if running CloudPass directly without the install scripts.
+
+### Linux
 
 ```bash
-cd api
-
-# Build the server
-go build -o cloudpass ./cmd/server
-
-# Run the server
-./cloudpass
+sudo cp /var/snap/multipass/common/data/multipassd/ssh-keys/id_rsa \
+       ~/.cloudpass/multipass_id_rsa
+sudo chmod 600 ~/.cloudpass/multipass_id_rsa
 ```
 
-#### Frontend
+### Windows
+
+```powershell
+# Create .cloudpass directory in your profile
+New-Item -ItemType Directory -Force -Path "$env:USERPROFILE\.cloudpass"
+
+# Copy the SSH key
+Copy-Item "C:\Windows\System32\config\systemprofile\AppData\Roaming\multipassd\ssh-keys\id_rsa" `
+    "$env:USERPROFILE\.cloudpass\id_rsa"
+```
+
+---
+
+## Upgrade
+
+### Linux
 
 ```bash
-cd ui
+sudo systemctl stop cloudpass
+# Replace the binary in /opt/cloudpass/
+sudo systemctl start cloudpass
+```
 
-# Install dependencies
-npm install
+### Windows
 
-# Start development server
-npm run dev
+```powershell
+Stop-Service CloudPass
+# Replace cloudpass.exe in C:\Program Files\CloudPass\
+Start-Service CloudPass
 ```
 
 ---
 
 ## Configuration
 
-### API Configuration (config.yaml)
+### config.yaml
 
 ```yaml
 server:
@@ -221,15 +239,14 @@ cloudpass/
 ├── api/                    # Go backend
 │   ├── cmd/server/         # Entry point
 │   ├── internal/
-│   │   ├── handlers/       # HTTP handlers (instances, networks, images, jobs)
-│   │   ├── middleware/    # Middleware (IP whitelist, logging)
-│   │   ├── multipass/     # CLI wrapper (client, SSH)
-│   │   ├── models/       # Data models
-│   │   ├── config/       # Configuration
-│   │   ├── logger/       # Logging
-│   │   ├── web/          # Embedded UI
-│   │   └── websocket/    # WebSocket terminal
-│   └── internal/web/     # UI build output (embedded)
+│   │   ├── handlers/       # HTTP handlers
+│   │   ├── middleware/     # Middleware
+│   │   ├── multipass/      # CLI wrapper
+│   │   ├── models/         # Data models
+│   │   ├── config/         # Configuration
+│   │   ├── logger/         # Logging
+│   │   ├── web/            # Embedded UI
+│   │   └── websocket/      # WebSocket terminal
 ├── ui/                     # Svelte frontend
 │   ├── src/
 │   │   ├── lib/
@@ -237,8 +254,8 @@ cloudpass/
 │   │   │   ├── services/    # API client
 │   │   │   ├── stores/      # Svelte stores
 │   │   │   └── types/       # TypeScript types
-│   │   └── routes/         # Pages
-│   └── static/
+│   │   └── routes/          # Pages
+├── scripts/                # Installation scripts
 ├── build.sh                # Build script
 ├── release.sh              # Release script
 ├── config.yaml             # Configuration
@@ -248,7 +265,7 @@ cloudpass/
 ### Running Tests
 
 ```bash
-# Backend tests (use -tags ci to skip web embed)
+# Backend tests
 cd api
 go test -tags ci ./...
 
@@ -258,9 +275,6 @@ npm run test
 
 # Lint
 cd api && golangci-lint run --build-tags ci ./...
-cd ui && npm run lint
-```
-cd api && golangci-lint run ./...
 cd ui && npm run lint
 ```
 
