@@ -17,7 +17,7 @@ func TestLoad_FileNotFound(t *testing.T) {
 func TestLoad_InvalidYAML(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	os.WriteFile(configPath, []byte("invalid: yaml: content:["), 0644)
+	require.NoError(t, os.WriteFile(configPath, []byte("invalid: yaml: content:["), 0644))
 
 	_, err := Load(configPath)
 	assert.Error(t, err)
@@ -42,7 +42,7 @@ logging:
   level: "debug"
   format: "text"
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	cfg, err := Load(configPath)
 	require.NoError(t, err)
@@ -60,7 +60,7 @@ logging:
 func TestLoad_EmptyConfig(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	os.WriteFile(configPath, []byte(""), 0644)
+	require.NoError(t, os.WriteFile(configPath, []byte(""), 0644))
 
 	cfg, err := Load(configPath)
 	require.NoError(t, err)
@@ -85,7 +85,7 @@ server:
 logging:
   level: "warn"
 `
-	os.WriteFile(configPath, []byte(configContent), 0644)
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
 
 	cfg, err := Load(configPath)
 	require.NoError(t, err)
@@ -98,7 +98,7 @@ logging:
 func TestLoad_EnvironmentVariables(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	os.WriteFile(configPath, []byte("server:\n  port: 8080\n"), 0644)
+	require.NoError(t, os.WriteFile(configPath, []byte("server:\n  port: 8080\n"), 0644))
 
 	os.Setenv("CLOUDPASS_HOST", "192.168.1.1")
 	os.Setenv("CLOUDPASS_PORT", "9999")
@@ -120,7 +120,7 @@ func TestLoad_EnvironmentVariables(t *testing.T) {
 func TestLoad_InvalidPortEnvVar(t *testing.T) {
 	tmpDir := t.TempDir()
 	configPath := filepath.Join(tmpDir, "config.yaml")
-	os.WriteFile(configPath, []byte("server:\n  port: 8080\n"), 0644)
+	require.NoError(t, os.WriteFile(configPath, []byte("server:\n  port: 8080\n"), 0644))
 
 	os.Setenv("CLOUDPASS_PORT", "not-a-number")
 	defer os.Unsetenv("CLOUDPASS_PORT")

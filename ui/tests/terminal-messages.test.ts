@@ -84,7 +84,7 @@ describe('Terminal WebSocket Message Handling', () => {
 	it('should encode terminal commands correctly for SSH', () => {
 		const testCases = [
 			{ input: 'ls -la', expectedLength: 6 },
-			{ input: 'echo hello', expectedLength: 11 },
+			{ input: 'echo hello', expectedLength: 10 },
 			{ input: 'pwd', expectedLength: 3 },
 			{ input: '\r', expectedLength: 1 },
 			{ input: '\n', expectedLength: 1 },

@@ -92,7 +92,9 @@ func (r *rotatingWriter) rotate() {
 	now := time.Now()
 	backupName := filepath.Join(filepath.Dir(r.file.Name()),
 		fmt.Sprintf("%s.%s.log", filepath.Base(r.file.Name()), now.Format("20060102150405")))
-	os.Rename(r.file.Name(), backupName)
+	if err := os.Rename(r.file.Name(), backupName); err != nil {
+		println("WARNING: failed to rotate log file: " + err.Error())
+	}
 
 	r.file, _ = os.OpenFile(r.file.Name(), os.O_CREATE|os.O_WRONLY, 0644)
 	r.size = 0

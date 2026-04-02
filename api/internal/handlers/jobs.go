@@ -23,7 +23,9 @@ type JobHandler struct {
 
 func generateJobID() string {
 	bytes := make([]byte, 8)
-	rand.Read(bytes)
+	if _, err := rand.Read(bytes); err != nil {
+		panic("crypto/rand.Read failed: " + err.Error())
+	}
 	return hex.EncodeToString(bytes)
 }
 
