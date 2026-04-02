@@ -77,6 +77,11 @@ else
     usermod -g "$CLOUDPASS_GROUP" "$CLOUDPASS_USER" 2>/dev/null || true
 fi
 
+info "Creating home directory for multipass client..."
+mkdir -p "/home/$CLOUDPASS_USER"
+chown "$CLOUDPASS_USER:$CLOUDPASS_GROUP" "/home/$CLOUDPASS_USER"
+chmod 700 "/home/$CLOUDPASS_USER"
+
 info "Creating installation directory..."
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$SSH_KEY_DIR"
