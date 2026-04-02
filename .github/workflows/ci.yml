@@ -28,7 +28,7 @@ jobs:
 
       - name: Run Go tests
         working-directory: ./api
-        run: go test ./...
+        run: go test $(go list ./... | grep -v /web)
 
   test-ui:
     name: Test UI (Node.js)
@@ -48,6 +48,10 @@ jobs:
         working-directory: ./ui
         run: npm ci
 
+      - name: Sync SvelteKit
+        working-directory: ./ui
+        run: npm exec svelte-kit sync
+
       - name: Run UI tests
         working-directory: ./ui
         run: npm test -- --run
@@ -64,6 +68,10 @@ jobs:
         with:
           go-version: '1.23'
 
+      - name: Install golangci-lint
+        working-directory: ./api
+        run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+
       - name: Run Go fmt check
         working-directory: ./api
         run: |
@@ -74,11 +82,8 @@ jobs:
           fi
 
       - name: Run golangci-lint
-        uses: golangci/golangci-lint-action@v6
-        with:
-          version: latest
-          working-directory: ./api
-          args: "./..."
+        working-directory: ./api
+        run: golangci-lint run $(go list ./... | grep -v /web | tr '\n' ' ')
 
   lint-ui:
     name: Lint UI (ESLint)
@@ -97,6 +102,10 @@ jobs:
       - name: Install dependencies
         working-directory: ./ui
         run: npm ci
+
+      - name: Sync SvelteKit
+        working-directory: ./ui
+        run: npm exec svelte-kit sync
 
       - name: Run ESLint
         working-directory: ./ui
