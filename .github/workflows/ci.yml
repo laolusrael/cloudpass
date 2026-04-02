@@ -28,7 +28,7 @@ jobs:
 
       - name: Run Go tests
         working-directory: ./api
-        run: go test ./cmd/... ./internal/config/... ./internal/handlers/... ./internal/logger/... ./internal/middleware/... ./internal/models/... ./internal/multipass/... ./internal/websocket/...
+        run: go test -tags ci ./...
 
   test-ui:
     name: Test UI (Node.js)
@@ -83,7 +83,7 @@ jobs:
 
       - name: Run golangci-lint
         working-directory: ./api
-        run: golangci-lint run ./cmd/... ./internal/config/... ./internal/handlers/... ./internal/logger/... ./internal/middleware/... ./internal/models/... ./internal/multipass/... ./internal/websocket/...
+        run: golangci-lint run --build-tags ci ./...
 
   lint-ui:
     name: Lint UI (ESLint)
