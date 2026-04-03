@@ -136,6 +136,8 @@ func DetectSocketPath() string {
 		return "/var/run/multipass_socket"
 	case "linux":
 		socketPaths := []string{
+			"/var/snap/multipass/common/multipass_socket",
+			"/var/run/multipass/socket",
 			"/var/run/multipass_socket",
 			"/run/multipass.socket",
 			"/tmp/multipass.socket",

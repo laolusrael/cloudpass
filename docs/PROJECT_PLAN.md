@@ -274,7 +274,7 @@ security:
     idle_timeout_minutes: 30
 
 multipass:
-  socket_path: "/var/run/multipass_socket"
+  socket_path: "/var/run/multipass/socket"
   default_timeout_seconds: 300
 
 logging:
