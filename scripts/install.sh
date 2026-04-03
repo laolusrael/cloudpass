@@ -10,35 +10,6 @@ NC='\033[0m'
 error() { echo -e "${RED}Error: $1${NC}" >&2; exit 1; }
 info() { echo -e "${GREEN}$1${NC}"; }
 warn() { echo -e "${YELLOW}$1${NC}"; }
-usage() {
-    echo -e "${BLUE}Usage: $0 [--port PORT]${NC}"
-    echo ""
-    echo "Options:"
-    echo "  --port PORT    Port to run CloudPass on (default: 8080)"
-    exit 0
-}
-
-if [ "$1" = "-h" ] || [ "$1" = "--help" ]; then
-    usage
-fi
-
-PORT=8080
-
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --port)
-            PORT="$2"
-            shift 2
-            ;;
-        *)
-            error "Unknown option: $1"
-            ;;
-    esac
-done
-
-if [[ ! "$PORT" =~ ^[0-9]+$ ]] || [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
-    error "Invalid port: $PORT. Port must be between 1 and 65535"
-fi
 
 if [ "$EUID" -ne 0 ]; then
     error "This script must be run as root (use sudo)"
@@ -47,259 +18,15 @@ fi
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BASE_DIR="$(dirname "$SCRIPT_DIR")"
 INSTALL_DIR="/opt/cloudpass"
-CLOUDPASS_USER="cloudpass"
-CLOUDPASS_GROUP="cloudpass"
-SSH_KEY_DIR="/home/$CLOUDPASS_USER/.cloudpass"
+
+# Use the user who ran sudo - this user already has multipass access
+RUN_USER="${SUDO_USER:-root}"
+SSH_KEY_DIR="/home/$RUN_USER/.cloudpass"
 SSH_KEY_TARGET="$SSH_KEY_DIR/multipass_id_rsa"
-
-detect_multipass_type() {
-    if snap list multipass &>/dev/null 2>&1; then
-        echo "snap"
-    elif dpkg -l multipass &>/dev/null 2>&1; then
-        echo "apt"
-    else
-        echo "none"
-    fi
-}
-
-get_multipass_paths() {
-    local type="$1"
-    case "$type" in
-        snap)
-            SOCKET_PATH="/var/snap/multipass/common/multipass_socket"
-            SSH_KEY_SOURCE="/var/snap/multipass/common/data/multipassd/ssh-keys/id_rsa"
-            DATA_DIR="/var/snap/multipass/common/data"
-            SOCKET_GROUP="sudo"
-            ;;
-        apt)
-            SOCKET_PATH="/var/run/multipass/socket"
-            SSH_KEY_SOURCE="/var/lib/multipass/ssh_keys/id_rsa"
-            DATA_DIR="/var/lib/multipass"
-            SOCKET_GROUP=""
-            ;;
-        none)
-            SOCKET_PATH=""
-            SSH_KEY_SOURCE=""
-            DATA_DIR=""
-            SOCKET_GROUP=""
-            ;;
-    esac
-}
-
-check_multipass_daemon() {
-    if ! command -v multipass &>/dev/null; then
-        return 1
-    fi
-    
-    if pgrep -x multipassd &>/dev/null; then
-        return 0
-    fi
-    
-    return 1
-}
-
-setup_socket_permissions() {
-    local type="$1"
-    
-    if [ -z "$SOCKET_PATH" ]; then
-        warn "Cannot setup socket permissions: socket path not determined"
-        return 1
-    fi
-    
-    if [ ! -S "$SOCKET_PATH" ]; then
-        warn "Multipass socket not found at $SOCKET_PATH"
-        warn "Is multipassd running?"
-        return 1
-    fi
-    
-    if [ "$type" = "snap" ]; then
-        info "Adding cloudpass user to sudo group for socket access..."
-        usermod -aG sudo "$CLOUDPASS_USER" 2>/dev/null || true
-    elif [ "$type" = "apt" ]; then
-        local actual_group
-        actual_group=$(stat -c '%G' "$SOCKET_PATH" 2>/dev/null)
-        
-        if [ -n "$actual_group" ] && [ "$actual_group" != "root" ]; then
-            info "Adding cloudpass user to $actual_group group for socket access..."
-            usermod -aG "$actual_group" "$CLOUDPASS_USER" 2>/dev/null || true
-        fi
-    fi
-    
-    return 0
-}
-
-is_cloudpass_authenticated() {
-    if sudo -u "$CLOUDPASS_USER" multipass list &>/dev/null 2>&1; then
-        return 0
-    fi
-    return 1
-}
-
-setup_multipass_auth() {
-    info "Setting up multipass authentication..."
-    
-    local multipass_type
-    multipass_type=$(detect_multipass_type)
-    
-    if [ "$multipass_type" = "none" ]; then
-        error "Multipass is not installed. Please install it first:"
-        echo ""
-        echo "  sudo snap install multipass"
-        echo ""
-        echo "Or for other distributions, see: https://multipass.run/install"
-        exit 1
-    fi
-    
-    info "Detected multipass installation: $multipass_type"
-    
-    get_multipass_paths "$multipass_type"
-    
-    if ! check_multipass_daemon; then
-        warn "Multipass daemon (multipassd) does not appear to be running"
-        warn "Please start multipass and try again"
-    fi
-    
-    setup_socket_permissions "$multipass_type"
-    
-    if is_cloudpass_authenticated; then
-        info "Cloudpass user is already authenticated with multipass"
-        return 0
-    fi
-    
-    info "Cloudpass user is not authenticated. Setting up authentication..."
-    
-    # Determine the user who installed multipass (should be authenticated)
-    local auth_user="$CLOUDPASS_USER"
-    if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
-        auth_user="$SUDO_USER"
-    fi
-    
-    # First try to use the original user's authentication via certificate
-    if [ "$multipass_type" = "snap" ]; then
-        local cert_source=""
-        local possible_paths=(
-            "/home/$auth_user/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem"
-            "/root/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem"
-            "$HOME/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem"
-        )
-        
-        for path in "${possible_paths[@]}"; do
-            if [ -f "$path" ]; then
-                cert_source="$path"
-                break
-            fi
-        done
-        
-        if [ -n "$cert_source" ] && [ -f "$cert_source" ]; then
-            local cert_dir="/var/snap/multipass/common/data/multipassd/authenticated-certs"
-            
-            if [ -d "$cert_dir" ]; then
-                if [ -f "$cert_dir/multipass_client_certs.pem" ]; then
-                    if ! grep -q "$(cat "$cert_source")" "$cert_dir/multipass_client_certs.pem" 2>/dev/null; then
-                        info "Adding certificate to multipass authenticated certs..."
-                        cat "$cert_source" >> "$cert_dir/multipass_client_certs.pem"
-                        chmod 0644 "$cert_dir/multipass_client_certs.pem"
-                    fi
-                else
-                    info "Adding certificate to multipass authenticated certs..."
-                    cat "$cert_source" > "$cert_dir/multipass_client_certs.pem"
-                    chmod 0644 "$cert_dir/multipass_client_certs.pem"
-                fi
-                
-                info "Restarting multipass to apply certificate..."
-                snap restart multipass 2>/dev/null || sudo snap restart multipass 2>/dev/null || true
-                sleep 3
-            fi
-        fi
-    fi
-    
-    # Check if certificate approach worked
-    if is_cloudpass_authenticated; then
-        info "Certificate-based authentication successful"
-    else
-        # Fallback: use passphrase approach - set as SUDO_USER, then authenticate cloudpass
-        info "Certificate approach didn't work, trying passphrase method..."
-        
-        # Generate passphrase
-        local passphrase
-        passphrase=$(openssl rand -base64 24 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c 32)
-        
-        if [ -n "$passphrase" ]; then
-            # Set passphrase as the authenticated user (SUDO_USER)
-            info "Setting passphrase as $auth_user..."
-            if sudo -u "$auth_user" bash -c "echo '$passphrase' | multipass set local.passphrase" 2>/dev/null; then
-                info "Passphrase set successfully"
-                
-                # Now authenticate cloudpass user with the same passphrase
-                info "Authenticating cloudpass user with passphrase..."
-                if echo "$passphrase" | sudo -u "$CLOUDPASS_USER" multipass authenticate 2>/dev/null; then
-                    info "Cloudpass user authenticated successfully"
-                else
-                    warn "Could not authenticate cloudpass user with passphrase"
-                fi
-            else
-                warn "Could not set passphrase as $auth_user"
-            fi
-        fi
-    fi
-    
-    # Verify authentication
-    if is_cloudpass_authenticated; then
-        info "Multipass authentication configured successfully"
-    else
-        warn "Authentication not verified - service may fail"
-    fi
-    
-    # Create env file for fallback (in case service needs passphrase later)
-    config_file="$INSTALL_DIR/config.yaml"
-    env_file="/etc/default/cloudpass"
-    
-    if [ -f "$config_file" ]; then
-        if grep -q "passphrase_env:" "$config_file" 2>/dev/null; then
-            sed -i 's/passphrase_env:.*/passphrase_env: "CLOUDPASS_MULTIPASS_PASS"/' "$config_file"
-        else
-            sed -i '/^multipass:/a\  passphrase_env: "CLOUDPASS_MULTIPASS_PASS"' "$config_file"
-        fi
-    fi
-    
-    info "Creating environment file at $env_file..."
-    echo "CLOUDPASS_MULTIPASS_PASS=$passphrase" > "$env_file"
-    chown root:root "$env_file"
-    chmod 600 "$env_file"
-    
-    if is_cloudpass_authenticated; then
-        info "Multipass authentication configured successfully"
-        return 0
-    else
-        warn "Authentication not verified - service may fail if multipass requires authentication"
-        return 0  # Continue anyway
-    fi
-}
-
-print_authentication_guide() {
-    echo ""
-    echo "================================================================================"
-    warn "WARNING: Could not automatically configure multipass authentication."
-    warn "CloudPass may fail to control instances."
-    echo ""
-    echo "To fix manually:"
-    echo ""
-    echo "1. As a user with multipass access, run:"
-    echo "   multipass set local.passphrase=your_secure_password"
-    echo ""
-    echo "2. Create /etc/default/cloudpass with:"
-    echo "   CLOUDPASS_MULTIPASS_PASS=your_secure_password"
-    echo ""
-    echo "3. Update config.yaml multipass section:"
-    echo "   passphrase_env: \"CLOUDPASS_MULTIPASS_PASS\""
-    echo ""
-    echo "4. Restart CloudPass: sudo systemctl restart cloudpass"
-    echo "================================================================================"
-    echo ""
-}
 
 info "Installing CloudPass..."
 
+# Check for cloudpass binary
 if [ -f "$SCRIPT_DIR/cloudpass" ]; then
     SOURCE_DIR="$SCRIPT_DIR"
 elif [ -f "$BASE_DIR/cloudpass" ]; then
@@ -312,61 +39,52 @@ if [ ! -f "$SOURCE_DIR/config.yaml" ]; then
     error "config.yaml not found. Please extract the release first."
 fi
 
-if id "$CLOUDPASS_USER" &>/dev/null; then
-    warn "User $CLOUDPASS_USER already exists"
-else
-    info "Creating user $CLOUDPASS_USER..."
-    useradd --system --no-create-home --shell /usr/sbin/nologin "$CLOUDPASS_USER" || true
-    groupadd --system "$CLOUDPASS_GROUP" 2>/dev/null || true
-    usermod -g "$CLOUDPASS_GROUP" "$CLOUDPASS_USER" 2>/dev/null || true
-fi
-
-info "Creating home directory for multipass client..."
-mkdir -p "/home/$CLOUDPASS_USER"
-chown "$CLOUDPASS_USER:$CLOUDPASS_GROUP" "/home/$CLOUDPASS_USER"
-chmod 700 "/home/$CLOUDPASS_USER"
-
+# Create installation directory
 info "Creating installation directory..."
 mkdir -p "$INSTALL_DIR"
 mkdir -p "$SSH_KEY_DIR"
 
+# Copy files
 info "Copying files..."
 cp "$SOURCE_DIR/cloudpass" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/config.yaml" "$INSTALL_DIR/"
 
-multipass_type=$(detect_multipass_type)
-get_multipass_paths "$multipass_type"
-
+# Copy SSH key if it exists
 if [ -f "$SSH_KEY_SOURCE" ]; then
-    info "Copying SSH key from $SSH_KEY_SOURCE..."
+    info "Copying SSH key..."
     cp "$SSH_KEY_SOURCE" "$SSH_KEY_TARGET"
-    chown "$CLOUDPASS_USER:$CLOUDPASS_GROUP" "$SSH_KEY_TARGET"
+    chown "$RUN_USER:$RUN_USER" "$SSH_KEY_TARGET"
     chmod 600 "$SSH_KEY_TARGET"
+fi
+
+# Update socket path in config
+info "Detecting multipass socket path..."
+if snap list multipass &>/dev/null 2>&1; then
+    SOCKET_PATH="/var/snap/multipass/common/multipass_socket"
+    SSH_KEY_SOURCE="/var/snap/multipass/common/data/multipassd/ssh-keys/id_rsa"
+    info "Detected snap installation"
+elif dpkg -l multipass &>/dev/null 2>&1; then
+    SOCKET_PATH="/var/run/multipass/socket"
+    SSH_KEY_SOURCE="/var/lib/multipass/ssh_keys/id_rsa"
+    info "Detected apt installation"
 else
-    warn "SSH key not found at $SSH_KEY_SOURCE"
-    warn "Terminal access may not work without SSH key"
-    warn "You can manually copy it later with:"
-    warn "  sudo cp <path-to-ssh-key> $SSH_KEY_TARGET"
-    warn "  sudo chown $CLOUDPASS_USER:$CLOUDPASS_GROUP $SSH_KEY_TARGET"
-    warn "  sudo chmod 600 $SSH_KEY_TARGET"
+    warn "Multipass not detected"
+    SOCKET_PATH=""
 fi
 
-if [ "$PORT" != "8080" ]; then
-    info "Updating port to $PORT..."
-    sed -i "s/port: 8080/port: $PORT/" "$INSTALL_DIR/config.yaml"
-fi
-
+# Update socket path in config if needed
 if [ -n "$SOCKET_PATH" ]; then
-    info "Updating multipass socket path in config..."
-    sed -i "s|socket_path:.*|socket_path: \"$SOCKET_PATH\"|" "$INSTALL_DIR/config.yaml"
+    if grep -q "socket_path:.*\\\\" "$INSTALL_DIR/config.yaml" 2>/dev/null; then
+        sed -i "s|socket_path:.*\\\\.*|socket_path: $SOCKET_PATH|" "$INSTALL_DIR/config.yaml"
+    fi
 fi
 
-setup_multipass_auth || true
+# Set ownership to the user who will run the service
+info "Setting ownership to $RUN_USER..."
+chown -R "$RUN_USER:$RUN_USER" "$INSTALL_DIR"
+chown -R "$RUN_USER:$RUN_USER" "$SSH_KEY_DIR"
 
-info "Setting ownership..."
-chown -R "$CLOUDPASS_USER:$CLOUDPASS_GROUP" "$INSTALL_DIR"
-chown -R "$CLOUDPASS_USER:$CLOUDPASS_GROUP" "$SSH_KEY_DIR"
-
+# Create systemd service
 info "Creating systemd service..."
 cat > /etc/systemd/system/cloudpass.service << EOF
 [Unit]
@@ -376,9 +94,8 @@ Wants=network.target
 
 [Service]
 Type=simple
-User=$CLOUDPASS_USER
-Group=$CLOUDPASS_GROUP
-EnvironmentFile=/etc/default/cloudpass
+User=$RUN_USER
+Group=$RUN_USER
 WorkingDirectory=$INSTALL_DIR
 ExecStart=$INSTALL_DIR/cloudpass -config $INSTALL_DIR/config.yaml
 Restart=on-failure
@@ -390,6 +107,7 @@ StandardError=journal
 WantedBy=multi-user.target
 EOF
 
+# Enable and start service
 info "Enabling and starting service..."
 systemctl daemon-reload
 systemctl enable cloudpass
@@ -400,7 +118,7 @@ info "=========================================="
 info "  CloudPass installed successfully!"
 info "=========================================="
 info ""
-info "Access the UI at: http://localhost:$PORT"
+info "Access the UI at: http://localhost:8080"
 info ""
 info "Commands:"
 info "  sudo systemctl start cloudpass   # Start service"

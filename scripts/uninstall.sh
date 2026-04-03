@@ -15,59 +15,45 @@ if [ "$EUID" -ne 0 ]; then
     error "This script must be run as root (use sudo)"
 fi
 
-CLOUDPASS_USER="cloudpass"
-CLOUDPASS_GROUP="cloudpass"
 INSTALL_DIR="/opt/cloudpass"
 
 info "Uninstalling CloudPass..."
 
+# Stop service if running
 if systemctl is-active --quiet cloudpass 2>/dev/null; then
     info "Stopping CloudPass service..."
     systemctl stop cloudpass
 fi
 
+# Disable service
 if systemctl is-enabled --quiet cloudpass 2>/dev/null; then
     info "Disabling CloudPass service..."
     systemctl disable cloudpass
 fi
 
+# Remove systemd service
 if [ -f /etc/systemd/system/cloudpass.service ]; then
     info "Removing systemd service..."
     rm -f /etc/systemd/system/cloudpass.service
     systemctl daemon-reload
 fi
 
+# Remove environment file
 if [ -f /etc/default/cloudpass ]; then
     info "Removing cloudpass environment file..."
     rm -f /etc/default/cloudpass
 fi
 
-if [ -d /home/cloudpass ]; then
-    info "Removing cloudpass home directory..."
-    rm -rf /home/cloudpass
-fi
-
-if [ -f /etc/sudoers.d/cloudpass-multipass ]; then
-    info "Removing sudo permissions..."
-    rm -f /etc/sudoers.d/cloudpass-multipass
-fi
-
-# Note: Multipass authentication certificates are NOT removed
-# as they may be needed by other users or reinstalls
-
+# Remove installation directory
 if [ -d "$INSTALL_DIR" ]; then
     info "Removing installation directory..."
     rm -rf "$INSTALL_DIR"
 fi
 
-if id "$CLOUDPASS_USER" &>/dev/null; then
-    info "Removing cloudpass user..."
-    userdel "$CLOUDPASS_USER" 2>/dev/null || true
-fi
-
-if getent group "$CLOUDPASS_GROUP" &>/dev/null; then
-    info "Removing cloudpass group..."
-    groupdel "$CLOUDPASS_GROUP" 2>/dev/null || true
+# Clean up SSH key directory if it exists
+if [ -d "/home/${SUDO_USER:-root}/.cloudpass" ]; then
+    info "Removing SSH key directory..."
+    rm -rf "/home/${SUDO_USER:-root}/.cloudpass"
 fi
 
 info ""
