@@ -176,25 +176,30 @@ setup_multipass_auth() {
     fi
     
     info "Setting multipass passphrase..."
-    if multipass set local.passphrase="$passphrase" 2>/dev/null; then
+    
+    # Run as original user (not root) to ensure multipass works properly
+    local set_user="$CLOUDPASS_USER"
+    if [ -n "$SUDO_USER" ]; then
+        set_user="$SUDO_USER"
+    fi
+    
+    if sudo -u "$set_user" multipass set local.passphrase="$passphrase" 2>/dev/null; then
         info "Passphrase set successfully"
         
         info "Authenticating cloudpass user..."
-        if sudo -u "$CLOUDPASS_USER" multipass authenticate "$passphrase" 2>/dev/null; then
+        if sudo -u "$set_user" multipass authenticate "$passphrase" 2>/dev/null; then
             info "Cloudpass user authenticated successfully"
         else
             warn "Could not authenticate cloudpass user automatically"
-            print_authentication_guide
-            return 1
         fi
     else
-        warn "Could not set passphrase (root user may not be authenticated)"
-        print_authentication_guide
-        return 1
+        warn "Could not set multipass passphrase"
+        warn "Continuing without automatic authentication"
     fi
     
-    local config_file="$INSTALL_DIR/config.yaml"
-    local env_file="/etc/default/cloudpass"
+    # Always create env file and update config, even if auth failed
+    config_file="$INSTALL_DIR/config.yaml"
+    env_file="/etc/default/cloudpass"
     
     if [ -f "$config_file" ]; then
         if grep -q "passphrase_env:" "$config_file" 2>/dev/null; then
@@ -213,9 +218,8 @@ setup_multipass_auth() {
         info "Multipass authentication configured successfully"
         return 0
     else
-        warn "Authentication verification failed"
-        print_authentication_guide
-        return 1
+        warn "Authentication not verified - service may fail if multipass requires authentication"
+        return 0  # Continue anyway
     fi
 }
 
