@@ -187,7 +187,7 @@ setup_multipass_auth() {
         info "Passphrase set successfully"
         
         info "Authenticating cloudpass user..."
-        if sudo -u "$set_user" multipass authenticate "$passphrase" 2>/dev/null; then
+        if echo "$passphrase" | sudo -u "$set_user" multipass authenticate 2>/dev/null; then
             info "Cloudpass user authenticated successfully"
         else
             warn "Could not authenticate cloudpass user automatically"
