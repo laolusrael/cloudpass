@@ -277,7 +277,7 @@ info "Copying files..."
 cp "$SOURCE_DIR/cloudpass" "$INSTALL_DIR/"
 cp "$SOURCE_DIR/config.yaml" "$INSTALL_DIR/"
 
-local multipass_type
+multipass_type
 multipass_type=$(detect_multipass_type)
 get_multipass_paths "$multipass_type"
 
