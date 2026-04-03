@@ -168,36 +168,77 @@ setup_multipass_auth() {
     
     info "Cloudpass user is not authenticated. Setting up authentication..."
     
+    # Use certificate-based authentication (no passphrase interaction needed)
+    info "Setting up certificate-based authentication..."
+    
+    # Determine the user who installed multipass (should be authenticated)
+    local auth_user="$CLOUDPASS_USER"
+    if [ -n "$SUDO_USER" ] && [ "$SUDO_USER" != "root" ]; then
+        auth_user="$SUDO_USER"
+    fi
+    
+    # Find the authenticated user's certificate
+    local cert_source=""
+    local possible_paths=(
+        "/home/$auth_user/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem"
+        "/root/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem"
+        "$HOME/snap/multipass/current/data/multipass-client-certificate/multipass_cert.pem"
+    )
+    
+    for path in "${possible_paths[@]}"; do
+        if [ -f "$path" ]; then
+            cert_source="$path"
+            break
+        fi
+    done
+    
+    # For snap installations
+    if [ "$multipass_type" = "snap" ]; then
+        local cert_dir="/var/snap/multipass/common/data/multipassd/authenticated-certs"
+        
+        if [ -n "$cert_source" ] && [ -f "$cert_source" ]; then
+            info "Found certificate at $cert_source"
+            
+            # Ensure directory exists
+            mkdir -p "$cert_dir"
+            
+            # Add certificate if not already present
+            if [ -f "$cert_dir/multipass_client_certs.pem" ]; then
+                if ! grep -q "$(cat "$cert_source")" "$cert_dir/multipass_client_certs.pem" 2>/dev/null; then
+                    info "Adding certificate to multipass authenticated certs..."
+                    cat "$cert_source" >> "$cert_dir/multipass_client_certs.pem"
+                    chmod 0644 "$cert_dir/multipass_client_certs.pem"
+                else
+                    info "Certificate already present in authenticated certs"
+                fi
+            else
+                info "Adding certificate to multipass authenticated certs..."
+                cat "$cert_source" > "$cert_dir/multipass_client_certs.pem"
+                chmod 0644 "$cert_dir/multipass_client_certs.pem"
+            fi
+            
+            info "Restarting multipass to apply certificate..."
+            snap restart multipass 2>/dev/null || sudo snap restart multipass 2>/dev/null || true
+            sleep 2
+        else
+            warn "Certificate not found at any expected location"
+            warn "Cannot use certificate-based authentication"
+        fi
+    fi
+    
+    # Check if authentication now works
+    if is_cloudpass_authenticated; then
+        info "Certificate-based authentication successful"
+    else
+        warn "Authentication may not have worked"
+        warn "CloudPass service may fail to communicate with multipass"
+    fi
+    
+    # For passphrase fallback (in case certificate doesn't work), still generate and store one
     local passphrase
     passphrase=$(openssl rand -base64 24 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c 32)
     
-    if [ -z "$passphrase" ]; then
-        error "Could not generate passphrase"
-    fi
-    
-    info "Setting multipass passphrase..."
-    
-    # Run as original user (not root) to ensure multipass works properly
-    local set_user="$CLOUDPASS_USER"
-    if [ -n "$SUDO_USER" ]; then
-        set_user="$SUDO_USER"
-    fi
-    
-    if sudo -u "$set_user" multipass set local.passphrase="$passphrase" 2>/dev/null; then
-        info "Passphrase set successfully"
-        
-        info "Authenticating cloudpass user..."
-        if echo "$passphrase" | sudo -u "$set_user" multipass authenticate 2>/dev/null; then
-            info "Cloudpass user authenticated successfully"
-        else
-            warn "Could not authenticate cloudpass user automatically"
-        fi
-    else
-        warn "Could not set multipass passphrase"
-        warn "Continuing without automatic authentication"
-    fi
-    
-    # Always create env file and update config, even if auth failed
+    # Always create env file and update config (even if we used certificate auth)
     config_file="$INSTALL_DIR/config.yaml"
     env_file="/etc/default/cloudpass"
     
