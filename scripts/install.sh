@@ -117,68 +117,43 @@ setup_multipass_auth() {
         return 1
     fi
 
-    if [ -f "$HOME/snap/multipass/common/multipassd.socket" ] || \
-       [ -f "/var/run/multipass_socket" ] || \
-       [ -f "/run/multipass.socket" ]; then
-        info "Multipass socket detected, checking authentication..."
-        
-        if multipass list &>/dev/null; then
-            info "Multipass is already accessible without authentication"
-            return 0
-        fi
+    # Check if already authenticated
+    if multipass list &>/dev/null; then
+        info "Multipass is already accessible"
+        return 0
     fi
 
-    # Check if passphrase already exists (if user is already authenticated)
-    local existing_pass=""
-    if multipass get local.passphrase 2>/dev/null; then
-        existing_pass=$(multipass get local.passphrase 2>/dev/null || echo "")
-    fi
+    # Generate passphrase
+    passphrase=$(openssl rand -base64 24 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c 32)
     
-    if [ -n "$existing_pass" ]; then
-        info "Using existing multipass passphrase"
-        passphrase="$existing_pass"
-    else
-        info "Generating new passphrase..."
-        passphrase=$(openssl rand -base64 24 2>/dev/null | tr -dc 'a-zA-Z0-9' | head -c 32)
-        
-        if [ -z "$passphrase" ]; then
-            warn "Could not generate passphrase"
-            return 1
-        fi
+    if [ -z "$passphrase" ]; then
+        warn "Could not generate passphrase"
+        return 1
     fi
 
-    # Set passphrase - prefer running as the original user (not root)
-    # because multipass set may require interactive input
-    info "Setting multipass passphrase..."
-    local set_result=""
-    
-    # First try as SUDO_USER if available (non-root user is more likely to work)
-    if [ -n "$SUDO_USER" ]; then
-        set_result=$(sudo -u "$SUDO_USER" multipass set local.passphrase="$passphrase" 2>&1) && set_result="success" || true
-        if [ "$set_result" = "success" ]; then
-            info "Passphrase set successfully (as $SUDO_USER)"
-        else
-            warn "Failed as $SUDO_USER, trying as root: $set_result"
-            # Fall back to root if SUDO_USER fails
-            set_result=$(multipass set local.passphrase="$passphrase" 2>&1) && set_result="success" || true
-            if [ "$set_result" = "success" ]; then
-                info "Passphrase set successfully"
-            else
-                warn "Failed to set passphrase: $set_result"
-                print_authentication_guide
-                return 1
-            fi
-        fi
+    echo ""
+    echo "=============================================================================="
+    echo "MULTIPASS AUTHENTICATION REQUIRED"
+    echo "=============================================================================="
+    echo ""
+    echo "CloudPass needs to authenticate with Multipass."
+    echo "Run this command in your terminal (NOT sudo):"
+    echo ""
+    echo "    multipass authenticate $passphrase"
+    echo ""
+    echo "After completing, press Enter to continue..."
+    echo "=============================================================================="
+    echo ""
+    read -p "Press Enter after running the authenticate command: "
+
+    # Verify authentication works for cloudpass user
+    info "Verifying authentication..."
+    if sudo -u "$CLOUDPASS_USER" multipass list &>/dev/null; then
+        info "Authentication verified successfully"
     else
-        # No SUDO_USER, try as current user
-        set_result=$(multipass set local.passphrase="$passphrase" 2>&1) && set_result="success" || true
-        if [ "$set_result" = "success" ]; then
-            info "Passphrase set successfully"
-        else
-            warn "Failed to set passphrase: $set_result"
-            print_authentication_guide
-            return 1
-        fi
+        warn "Warning: Could not verify cloudpass user authentication"
+        warn "CloudPass service may fail to communicate with multipass"
+        warn "You may need to run: sudo -u cloudpass multipass authenticate $passphrase"
     fi
 
     info "Configuring CloudPass to use passphrase authentication..."
