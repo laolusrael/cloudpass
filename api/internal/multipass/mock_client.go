@@ -228,3 +228,7 @@ func (m *MockClient) ImportInstance(imagePath string, name string, cpus int, mem
 	m.instances = append(m.instances, inst)
 	return &inst, nil
 }
+
+func (m *MockClient) Authenticate(passphrase string) error {
+	return nil
+}
