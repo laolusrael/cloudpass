@@ -186,6 +186,10 @@ func (m *MockClient) UnmountInstance(instanceName string, targetPath string) err
 	return nil
 }
 
+func (m *MockClient) ensureTargetPath(instanceName string, targetPath string) error {
+	return nil
+}
+
 func (m *MockClient) PurgeDeleted() error {
 	return nil
 }
@@ -223,4 +227,8 @@ func (m *MockClient) ImportInstance(imagePath string, name string, cpus int, mem
 	inst := models.Instance{Name: name}
 	m.instances = append(m.instances, inst)
 	return &inst, nil
+}
+
+func (m *MockClient) Authenticate(passphrase string) error {
+	return nil
 }

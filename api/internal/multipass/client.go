@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"runtime"
 	"strconv"
 	"strings"
 	"time"
@@ -576,10 +577,30 @@ func (c *multipassClient) MountInstance(instanceName string, sourcePath string, 
 		return fmt.Errorf("cannot access source path %q: %w", sourcePath, err)
 	}
 
+	instance, err := c.GetInstance(instanceName)
+	if err != nil {
+		return fmt.Errorf("failed to get instance: %w", err)
+	}
+	if instance == nil {
+		return fmt.Errorf("instance %q not found", instanceName)
+	}
+	if instance.State != "Running" {
+		return fmt.Errorf("instance %q is not running (current state: %s)", instanceName, instance.State)
+	}
+
+	if err := c.ensureTargetPath(instanceName, targetPath); err != nil {
+		return fmt.Errorf("failed to create target path: %w", err)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	args := []string{"mount", sourcePath, instanceName + ":" + targetPath}
+	var args []string
+	if runtime.GOOS == "linux" {
+		args = []string{"mount", "--type=native", sourcePath, instanceName + ":" + targetPath}
+	} else {
+		args = []string{"mount", sourcePath, instanceName + ":" + targetPath}
+	}
 
 	logger.Multipass.Info().
 		Str("instance", instanceName).
@@ -588,8 +609,18 @@ func (c *multipassClient) MountInstance(instanceName string, sourcePath string, 
 		Msg("mounting directory")
 
 	cmd := exec.CommandContext(ctx, "multipass", args...)
-	_, err := cmd.Output()
+	var stderrOut string
+	_, err = cmd.Output()
 	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderrOut = string(exitErr.Stderr)
+			logger.Multipass.Error().
+				Err(err).
+				Str("instance", instanceName).
+				Str("stderr", stderrOut).
+				Msg("failed to mount directory")
+			return fmt.Errorf("failed to mount directory: %s", stderrOut)
+		}
 		logger.Multipass.Error().
 			Err(err).
 			Str("instance", instanceName).
@@ -601,6 +632,22 @@ func (c *multipassClient) MountInstance(instanceName string, sourcePath string, 
 		Str("instance", instanceName).
 		Str("target", targetPath).
 		Msg("directory mounted")
+	return nil
+}
+
+func (c *multipassClient) ensureTargetPath(instanceName string, targetPath string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	mkdirCmd := exec.CommandContext(ctx, "multipass", "exec", instanceName, "--", "mkdir", "-p", targetPath)
+	if err := mkdirCmd.Run(); err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderr := string(exitErr.Stderr)
+			return fmt.Errorf("failed to create target path %q in instance: %s", targetPath, stderr)
+		}
+		return fmt.Errorf("failed to create target path %q in instance: %w", targetPath, err)
+	}
+
 	return nil
 }
 
