@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"cloudpass/internal/config"
 	"cloudpass/internal/models"
 	"cloudpass/internal/multipass"
 
@@ -49,8 +50,14 @@ func TestValidateInstanceName(t *testing.T) {
 }
 
 func setupInstanceRouter(client multipass.Client) *echo.Echo {
+	cfg := &config.Config{
+		Upload: config.UploadConfig{
+			MaxFileSizeMB: 100,
+			DefaultPath:   "/home/ubuntu/uploads",
+		},
+	}
 	e := echo.New()
-	handler := NewInstanceHandler(client)
+	handler := NewInstanceHandler(client, cfg)
 	e.GET("/instances", handler.List)
 	e.GET("/instances/:name", handler.Get)
 	e.POST("/instances", handler.Create)
@@ -325,8 +332,14 @@ func TestRestart_Success(t *testing.T) {
 }
 
 func setupSnapshotRouter(client multipass.Client) *echo.Echo {
+	cfg := &config.Config{
+		Upload: config.UploadConfig{
+			MaxFileSizeMB: 100,
+			DefaultPath:   "/home/ubuntu/uploads",
+		},
+	}
 	e := echo.New()
-	handler := NewInstanceHandler(client)
+	handler := NewInstanceHandler(client, cfg)
 	e.POST("/instances/:name/snapshots", handler.CreateSnapshot)
 	e.GET("/instances/:name/snapshots", handler.ListSnapshots)
 	e.POST("/instances/:name/snapshots/:id/restore", handler.RestoreSnapshot)
@@ -479,8 +492,14 @@ func TestImport_MissingImagePath(t *testing.T) {
 }
 
 func setupMountRouter(client multipass.Client) *echo.Echo {
+	cfg := &config.Config{
+		Upload: config.UploadConfig{
+			MaxFileSizeMB: 100,
+			DefaultPath:   "/home/ubuntu/uploads",
+		},
+	}
 	e := echo.New()
-	handler := NewInstanceHandler(client)
+	handler := NewInstanceHandler(client, cfg)
 	e.POST("/instances/:name/mounts", handler.Mount)
 	e.DELETE("/instances/:name/mounts", handler.Unmount)
 	return e
