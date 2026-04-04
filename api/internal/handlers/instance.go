@@ -706,10 +706,24 @@ func (h *InstanceHandler) Mount(c echo.Context) error {
 
 	err := h.client.MountInstance(name, req.SourcePath, req.TargetPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "does not exist") {
+		if strings.Contains(err.Error(), "does not exist") || strings.Contains(err.Error(), "not found") {
 			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",
+				Message: err.Error(),
+			})
+		}
+		if strings.Contains(err.Error(), "is not running") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not running")
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "instance_not_running",
+				Message: err.Error(),
+			})
+		}
+		if strings.Contains(err.Error(), "source path") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("source", req.SourcePath).Msg("source path error")
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
 				Message: err.Error(),
 			})
 		}

@@ -186,6 +186,10 @@ func (m *MockClient) UnmountInstance(instanceName string, targetPath string) err
 	return nil
 }
 
+func (m *MockClient) ensureTargetPath(instanceName string, targetPath string) error {
+	return nil
+}
+
 func (m *MockClient) PurgeDeleted() error {
 	return nil
 }
