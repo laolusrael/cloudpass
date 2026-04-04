@@ -19,12 +19,18 @@ type Config struct {
 	Server    ServerConfig    `yaml:"server"`
 	Security  SecurityConfig  `yaml:"security"`
 	Multipass MultipassConfig `yaml:"multipass"`
+	Upload    UploadConfig    `yaml:"upload"`
 	Logging   LoggingConfig   `yaml:"logging"`
 }
 
 type ServerConfig struct {
 	Host string `yaml:"host"`
 	Port int    `yaml:"port"`
+}
+
+type UploadConfig struct {
+	MaxFileSizeMB int    `yaml:"max_file_size_mb"`
+	DefaultPath   string `yaml:"default_path"`
 }
 
 type SecurityConfig struct {
@@ -82,6 +88,10 @@ var defaultConfig = Config{
 		DefaultTimeoutSec: 1800,
 		SSHKeyPath:        "",
 		PassphraseEnv:     "",
+	},
+	Upload: UploadConfig{
+		MaxFileSizeMB: 100,
+		DefaultPath:   "/home/ubuntu/uploads",
 	},
 	Logging: LoggingConfig{
 		Level:  "info",

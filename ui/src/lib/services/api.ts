@@ -14,6 +14,7 @@ import type {
 	ImportInstanceRequest,
 	MountRequest,
 	MountResponse,
+	UploadResponse,
 	ConfigResponse,
 	ConfigUpdateRequest,
 	Job,
@@ -183,6 +184,26 @@ class ApiService {
 			method: 'DELETE',
 			body: JSON.stringify({ target_path: targetPath })
 		});
+	}
+
+	async uploadFile(instanceName: string, file: File, targetPath?: string): Promise<UploadResponse> {
+		const formData = new FormData();
+		formData.append('file', file);
+		if (targetPath) {
+			formData.append('target_path', targetPath);
+		}
+
+		const response = await fetch(`${API_BASE}/instances/${encodeURIComponent(instanceName)}/upload`, {
+			method: 'POST',
+			body: formData
+		});
+
+		if (!response.ok) {
+			const error = await response.json();
+			throw new Error(error.message || 'Upload failed');
+		}
+
+		return response.json();
 	}
 
 	async getConfig(): Promise<ConfigResponse> {

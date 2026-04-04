@@ -1,24 +1,29 @@
 package handlers
 
 import (
-	"errors"
-	"net/http"
-	"regexp"
-	"strings"
-
+	"cloudpass/internal/config"
 	"cloudpass/internal/logger"
 	"cloudpass/internal/models"
 	"cloudpass/internal/multipass"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 )
 
 type InstanceHandler struct {
 	client multipass.Client
+	cfg    *config.Config
 }
 
-func NewInstanceHandler(client multipass.Client) *InstanceHandler {
-	return &InstanceHandler{client: client}
+func NewInstanceHandler(client multipass.Client, cfg *config.Config) *InstanceHandler {
+	return &InstanceHandler{client: client, cfg: cfg}
 }
 
 var instanceNameRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
@@ -796,5 +801,107 @@ func (h *InstanceHandler) Unmount(c echo.Context) error {
 	return c.JSON(http.StatusOK, models.MountResponse{
 		Message: "Directory unmounted",
 		Target:  req.TargetPath,
+	})
+}
+
+func (h *InstanceHandler) Upload(c echo.Context) error {
+	name := c.Param("name")
+	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "instance name is required",
+		})
+	}
+
+	if err := validateInstanceName(name); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+		})
+	}
+
+	file, err := c.FormFile("file")
+	if err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Msg("no file in request")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "file is required",
+		})
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Msg("failed to open uploaded file")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "upload_error",
+			Message: "failed to read uploaded file",
+		})
+	}
+	defer src.Close()
+
+	maxSize := int64(h.cfg.Upload.MaxFileSizeMB) * 1024 * 1024
+	if file.Size > maxSize {
+		logger.API.Warn().Str("ip", c.RealIP()).Int64("size", file.Size).Int64("max", maxSize).Msg("file too large")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "file_too_large",
+			Message: fmt.Sprintf("file size exceeds maximum of %d MB", h.cfg.Upload.MaxFileSizeMB),
+		})
+	}
+
+	tmpDir := os.TempDir()
+	tmpFile := filepath.Join(tmpDir, filepath.Base(file.Filename))
+	dst, err := os.Create(tmpFile)
+	if err != nil {
+		logger.API.Error().Err(err).Msg("failed to create temp file")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "upload_error",
+			Message: "failed to process uploaded file",
+		})
+	}
+	defer os.Remove(tmpFile)
+	defer dst.Close()
+
+	if _, err := io.Copy(dst, src); err != nil {
+		logger.API.Error().Err(err).Msg("failed to write temp file")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "upload_error",
+			Message: "failed to process uploaded file",
+		})
+	}
+	dst.Close()
+
+	targetPath := c.FormValue("target_path")
+	if targetPath == "" {
+		targetPath = filepath.Join(h.cfg.Upload.DefaultPath, file.Filename)
+	}
+
+	if err := h.client.UploadFile(name, tmpFile, targetPath); err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
+			return c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "not_found",
+				Message: err.Error(),
+			})
+		}
+		if strings.Contains(err.Error(), "is not running") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not running")
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "instance_not_running",
+				Message: err.Error(),
+			})
+		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to upload file")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "multipass_error",
+			Message: err.Error(),
+		})
+	}
+
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Str("target", targetPath).Msg("file uploaded")
+	return c.JSON(http.StatusCreated, models.UploadResponse{
+		Message: "File uploaded",
+		Path:    targetPath,
 	})
 }

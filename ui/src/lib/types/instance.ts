@@ -180,6 +180,11 @@ export interface MountResponse {
 	target?: string;
 }
 
+export interface UploadResponse {
+	message?: string;
+	path?: string;
+}
+
 export interface ConfigResponse {
 	server: {
 		host: string;
@@ -193,6 +198,10 @@ export interface ConfigResponse {
 		socket_path: string;
 		default_timeout_seconds: number;
 		ssh_key_path: string;
+	};
+	upload?: {
+		max_file_size_mb: number;
+		default_path: string;
 	};
 	logging: {
 		level: string;
@@ -214,6 +223,10 @@ export interface ConfigUpdateRequest {
 		socket_path?: string;
 		default_timeout_seconds?: number;
 		ssh_key_path?: string;
+	};
+	upload?: {
+		max_file_size_mb?: number;
+		default_path?: string;
 	};
 	logging?: {
 		level?: string;
