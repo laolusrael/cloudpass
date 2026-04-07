@@ -7,12 +7,26 @@ import (
 	"strings"
 	"testing"
 
+	"cloudpass/internal/config"
 	"cloudpass/internal/models"
 	"cloudpass/internal/multipass"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
 )
+
+func testConfig() *config.Config {
+	return &config.Config{
+		Server: config.ServerConfig{Host: "0.0.0.0", Port: 8080},
+		Multipass: config.MultipassConfig{
+			DefaultTimeoutSec: 300,
+		},
+		Upload: config.UploadConfig{
+			MaxFileSizeMB: 100,
+			DefaultPath:   "/home/ubuntu",
+		},
+	}
+}
 
 func TestValidateInstanceName(t *testing.T) {
 	tests := []struct {
@@ -50,7 +64,7 @@ func TestValidateInstanceName(t *testing.T) {
 
 func setupInstanceRouter(client multipass.Client) *echo.Echo {
 	e := echo.New()
-	handler := NewInstanceHandler(client)
+	handler := NewInstanceHandler(client, testConfig())
 	e.GET("/instances", handler.List)
 	e.GET("/instances/:name", handler.Get)
 	e.POST("/instances", handler.Create)
@@ -326,7 +340,7 @@ func TestRestart_Success(t *testing.T) {
 
 func setupSnapshotRouter(client multipass.Client) *echo.Echo {
 	e := echo.New()
-	handler := NewInstanceHandler(client)
+	handler := NewInstanceHandler(client, testConfig())
 	e.POST("/instances/:name/snapshots", handler.CreateSnapshot)
 	e.GET("/instances/:name/snapshots", handler.ListSnapshots)
 	e.POST("/instances/:name/snapshots/:id/restore", handler.RestoreSnapshot)
@@ -480,7 +494,7 @@ func TestImport_MissingImagePath(t *testing.T) {
 
 func setupMountRouter(client multipass.Client) *echo.Echo {
 	e := echo.New()
-	handler := NewInstanceHandler(client)
+	handler := NewInstanceHandler(client, testConfig())
 	e.POST("/instances/:name/mounts", handler.Mount)
 	e.DELETE("/instances/:name/mounts", handler.Unmount)
 	return e
