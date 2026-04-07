@@ -73,6 +73,7 @@ create_release() {
     else
         cp scripts/install.sh "$release_dir/scripts/"
         cp scripts/uninstall.sh "$release_dir/scripts/"
+        cp scripts/update.sh "$release_dir/scripts/"
         chmod +x "$release_dir/scripts/"*.sh
     fi
 }
