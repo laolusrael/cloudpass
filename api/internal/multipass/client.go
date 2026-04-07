@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
@@ -36,6 +37,7 @@ type Client interface {
 	DeleteNetwork(name string) error
 	MountInstance(instanceName string, sourcePath string, targetPath string) error
 	UnmountInstance(instanceName string, targetPath string) error
+	UploadFile(instanceName string, localPath string, targetPath string) error
 	CreateSnapshot(instanceName string, snapshotName string, comment string) error
 	RestoreSnapshot(instanceName string, snapshotName string) error
 	ListSnapshots(instanceName string) ([]models.Snapshot, error)
@@ -676,6 +678,70 @@ func (c *multipassClient) UnmountInstance(instanceName string, targetPath string
 		Str("instance", instanceName).
 		Str("target", targetPath).
 		Msg("directory unmounted")
+	return nil
+}
+
+func (c *multipassClient) UploadFile(instanceName string, localPath string, targetPath string) error {
+	if _, err := os.Stat(localPath); os.IsNotExist(err) {
+		return fmt.Errorf("local file %q does not exist", localPath)
+	} else if err != nil {
+		return fmt.Errorf("cannot access local file %q: %w", localPath, err)
+	}
+
+	instance, err := c.GetInstance(instanceName)
+	if err != nil {
+		return fmt.Errorf("failed to get instance: %w", err)
+	}
+	if instance == nil {
+		return fmt.Errorf("instance %q not found", instanceName)
+	}
+	if instance.State != "Running" {
+		return fmt.Errorf("instance %q is not running (current state: %s)", instanceName, instance.State)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	targetDir := filepath.Dir(targetPath)
+	if targetDir != "." {
+		mkdirCmd := exec.CommandContext(ctx, "multipass", "exec", instanceName, "--", "mkdir", "-p", targetDir)
+		if err := mkdirCmd.Run(); err != nil {
+			return fmt.Errorf("failed to create target directory: %w", err)
+		}
+	}
+
+	args := []string{"transfer", "--parents", localPath, instanceName + ":" + targetPath}
+
+	logger.Multipass.Info().
+		Str("instance", instanceName).
+		Str("local", localPath).
+		Str("target", targetPath).
+		Msg("uploading file to instance")
+
+	cmd := exec.CommandContext(ctx, "multipass", args...)
+	var stderrOut string
+	_, err = cmd.Output()
+	if err != nil {
+		if exitErr, ok := err.(*exec.ExitError); ok {
+			stderrOut = string(exitErr.Stderr)
+			logger.Multipass.Error().
+				Err(err).
+				Str("instance", instanceName).
+				Str("stderr", stderrOut).
+				Msg("failed to upload file")
+			return fmt.Errorf("failed to upload file: %s", stderrOut)
+		}
+		logger.Multipass.Error().
+			Err(err).
+			Str("instance", instanceName).
+			Msg("failed to upload file")
+		return fmt.Errorf("failed to upload file: %w", err)
+	}
+
+	logger.Multipass.Info().
+		Str("instance", instanceName).
+		Str("target", targetPath).
+		Msg("file uploaded to instance")
 	return nil
 }
 

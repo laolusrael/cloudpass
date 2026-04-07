@@ -164,6 +164,11 @@ type MountResponse struct {
 	Target  string `json:"target,omitempty"`
 }
 
+type UploadResponse struct {
+	Message string `json:"message,omitempty"`
+	Path    string `json:"path,omitempty"`
+}
+
 type ServerConfigResponse struct {
 	Host string `json:"host"`
 	Port int    `json:"port"`

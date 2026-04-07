@@ -190,6 +190,10 @@ func (m *MockClient) ensureTargetPath(instanceName string, targetPath string) er
 	return nil
 }
 
+func (m *MockClient) UploadFile(instanceName string, localPath string, targetPath string) error {
+	return nil
+}
+
 func (m *MockClient) PurgeDeleted() error {
 	return nil
 }

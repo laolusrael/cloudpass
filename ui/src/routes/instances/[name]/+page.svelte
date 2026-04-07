@@ -16,6 +16,10 @@
 	let mountSourcePath = $state('');
 	let mountTargetPath = $state('');
 	let mounting = $state(false);
+	let showUploadModal = $state(false);
+	let uploadTargetPath = $state('');
+	let uploading = $state(false);
+	let fileInput: HTMLInputElement;
 
 	const name = $derived($page.params.name);
 
@@ -128,6 +132,23 @@
 			} catch (e) {
 				error = e instanceof Error ? e.message : 'Failed to unmount';
 			}
+		}
+	}
+
+	async function handleUpload() {
+		if (!instance || !fileInput?.files?.length) return;
+		const file = fileInput.files[0];
+		uploading = true;
+		error = null;
+		try {
+			await api.uploadFile(instance.name, file, uploadTargetPath || undefined);
+			showUploadModal = false;
+			uploadTargetPath = '';
+			fileInput.value = '';
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to upload';
+		} finally {
+			uploading = false;
 		}
 	}
 
@@ -250,7 +271,10 @@
 				<div class="flex items-center justify-between mb-3">
 					<h3 class="text-sm font-medium text-gray-500">Mounts</h3>
 					{#if isRunning}
-						<Button variant="secondary" onclick={() => (showMountModal = true)}>Add Mount</Button>
+						<div class="flex gap-2">
+							<Button variant="secondary" onclick={() => (showUploadModal = true)}>Upload File</Button>
+							<Button variant="secondary" onclick={() => (showMountModal = true)}>Add Mount</Button>
+						</div>
 					{/if}
 				</div>
 				{#if instance.mounts && instance.mounts.length > 0}
@@ -326,6 +350,49 @@
 					disabled={mounting || !mountSourcePath.trim() || !mountTargetPath.trim()}
 				>
 					{mounting ? 'Mounting...' : 'Mount'}
+				</Button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<input
+	type="file"
+	bind:this={fileInput}
+	onchange={() => (showUploadModal = true)}
+	class="hidden"
+/>
+
+{#if showUploadModal}
+	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+		<div class="bg-white rounded-lg p-6 w-full max-w-md">
+			<h3 class="text-lg font-medium mb-4">Upload File</h3>
+			<p class="text-sm text-gray-500 mb-4">
+				Select a file to upload to the instance.
+			</p>
+			<div class="space-y-4">
+				<div>
+					<label for="upload-target" class="block text-sm font-medium text-gray-700 mb-1">
+						Target Path (optional)
+					</label>
+					<input
+						id="upload-target"
+						type="text"
+						bind:value={uploadTargetPath}
+						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+						placeholder="/home/ubuntu/uploads"
+					/>
+				</div>
+			</div>
+			{#if error}
+				<div class="mt-4 p-3 bg-red-50 border border-red-200 rounded">
+					<p class="text-sm text-red-600">{error}</p>
+				</div>
+			{/if}
+			<div class="mt-6 flex justify-end gap-3">
+				<Button variant="secondary" onclick={() => (showUploadModal = false)}>Cancel</Button>
+				<Button variant="primary" onclick={handleUpload} disabled={uploading}>
+					{uploading ? 'Uploading...' : 'Upload'}
 				</Button>
 			</div>
 		</div>

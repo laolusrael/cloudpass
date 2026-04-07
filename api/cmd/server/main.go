@@ -94,7 +94,7 @@ func main() {
 
 	eventHub := handlers.NewEventHub()
 
-	instanceHandler := handlers.NewInstanceHandler(mpClient)
+	instanceHandler := handlers.NewInstanceHandler(mpClient, cfg)
 	imageHandler := handlers.NewImageHandler(mpClient)
 	networkHandler := handlers.NewNetworkHandler(mpClient)
 	healthHandler := handlers.NewHealthHandler()
@@ -144,6 +144,7 @@ func main() {
 	api.DELETE("/instances/:name/snapshots/:id", instanceHandler.DeleteSnapshot)
 	api.POST("/instances/:name/mounts", instanceHandler.Mount)
 	api.DELETE("/instances/:name/mounts", instanceHandler.Unmount)
+	api.POST("/instances/:name/upload", instanceHandler.Upload)
 	api.GET("/instances/:name/terminal", terminalHandler.HandleTerminal)
 
 	api.GET("/images", imageHandler.List)
