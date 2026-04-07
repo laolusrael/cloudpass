@@ -42,6 +42,7 @@
 			if (event.data instanceof Blob) {
 				const buf = await event.data.arrayBuffer();
 				terminal?.write(new Uint8Array(buf));
+				terminal?.scrollToBottom();
 			} else {
 				try {
 					const msg = JSON.parse(event.data);
@@ -53,6 +54,7 @@
 				} catch {
 					// Plain text - write to terminal
 					terminal?.write(event.data);
+					terminal?.scrollToBottom();
 				}
 			}
 		};
@@ -101,6 +103,7 @@
 		terminal.onData((data) => {
 			if (ws && ws.readyState === WebSocket.OPEN) {
 				ws.send(new TextEncoder().encode(data));
+				terminal?.scrollToBottom();
 			}
 		});
 
@@ -146,5 +149,20 @@
 	}
 	:global(.xterm-viewport) {
 		overflow-y: auto !important;
+		scrollbar-width: thin;
+		scrollbar-color: #666 transparent;
+	}
+	:global(.xterm-viewport::-webkit-scrollbar) {
+		width: 8px;
+	}
+	:global(.xterm-viewport::-webkit-scrollbar-track) {
+		background: transparent;
+	}
+	:global(.xterm-viewport::-webkit-scrollbar-thumb) {
+		background: #666;
+		border-radius: 4px;
+	}
+	:global(.xterm-viewport::-webkit-scrollbar-thumb:hover) {
+		background: #888;
 	}
 </style>
