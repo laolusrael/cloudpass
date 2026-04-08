@@ -88,7 +88,7 @@ describe('Terminal WebSocket Message Handling', () => {
 			{ input: 'pwd', expectedLength: 3 },
 			{ input: '\r', expectedLength: 1 },
 			{ input: '\n', expectedLength: 1 },
-			{ input: '\u0003', expectedLength: 1 },
+			{ input: '\u0003', expectedLength: 1 }
 		];
 
 		testCases.forEach(({ input, expectedLength }) => {
@@ -104,7 +104,7 @@ describe('Terminal WebSocket Message Handling', () => {
 			'ls -la',
 			'cd /tmp && pwd',
 			'echo "test with spaces"',
-			'cat file.txt | head -n 10',
+			'cat file.txt | head -n 10'
 		];
 
 		const encoder = new TextEncoder();

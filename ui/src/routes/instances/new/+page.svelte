@@ -19,7 +19,8 @@
 				if (jobStatus === 'pending') {
 					status = 'Preparing instance creation...';
 				} else if (jobStatus === 'running') {
-					status = 'Creating instance (this may take a few minutes for first-time image download)...';
+					status =
+						'Creating instance (this may take a few minutes for first-time image download)...';
 				}
 			});
 			notifications.success(`Instance "${data.name || 'new instance'}" created successfully`);
@@ -57,7 +58,9 @@
 	{#if status}
 		<div class="mb-6 bg-blue-50 border border-blue-200 rounded p-4">
 			<div class="flex items-center gap-3">
-				<div class="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"></div>
+				<div
+					class="animate-spin h-5 w-5 border-2 border-blue-500 border-t-transparent rounded-full"
+				></div>
 				<p class="text-sm text-blue-600">{status}</p>
 			</div>
 		</div>

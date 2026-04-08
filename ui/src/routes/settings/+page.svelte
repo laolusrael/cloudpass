@@ -67,11 +67,11 @@
 					allowed_ips: ips,
 					websocket_timeout_minutes: websocketTimeout
 				},
-			multipass: {
-				socket_path: socketPath,
-				default_timeout_seconds: timeoutSec,
-				ssh_key_path: sshKeyPath
-			},
+				multipass: {
+					socket_path: socketPath,
+					default_timeout_seconds: timeoutSec,
+					ssh_key_path: sshKeyPath
+				},
 				logging: {
 					level: logLevel,
 					format: logFormat,
@@ -121,7 +121,9 @@
 				<h3 class="text-sm font-medium text-gray-500 mb-4">Server</h3>
 				<div class="space-y-4">
 					<div>
-						<label for="server-host" class="block text-sm font-medium text-gray-700 mb-1">Host</label>
+						<label for="server-host" class="block text-sm font-medium text-gray-700 mb-1"
+							>Host</label
+						>
 						<input
 							id="server-host"
 							type="text"
@@ -131,7 +133,9 @@
 						/>
 					</div>
 					<div>
-						<label for="server-port" class="block text-sm font-medium text-gray-700 mb-1">Port</label>
+						<label for="server-port" class="block text-sm font-medium text-gray-700 mb-1"
+							>Port</label
+						>
 						<input
 							id="server-port"
 							type="number"
@@ -178,7 +182,9 @@
 				<h3 class="text-sm font-medium text-gray-500 mb-4">Multipass</h3>
 				<div class="space-y-4">
 					<div>
-						<label for="socket-path" class="block text-sm font-medium text-gray-700 mb-1">Socket Path</label>
+						<label for="socket-path" class="block text-sm font-medium text-gray-700 mb-1"
+							>Socket Path</label
+						>
 						<input
 							id="socket-path"
 							type="text"
@@ -221,7 +227,8 @@
 				<h3 class="text-sm font-medium text-gray-500 mb-4">Logging</h3>
 				<div class="space-y-4">
 					<div>
-						<label for="log-level" class="block text-sm font-medium text-gray-700 mb-1">Level</label>
+						<label for="log-level" class="block text-sm font-medium text-gray-700 mb-1">Level</label
+						>
 						<select
 							id="log-level"
 							bind:value={logLevel}
@@ -234,7 +241,9 @@
 						</select>
 					</div>
 					<div>
-						<label for="log-format" class="block text-sm font-medium text-gray-700 mb-1">Format</label>
+						<label for="log-format" class="block text-sm font-medium text-gray-700 mb-1"
+							>Format</label
+						>
 						<select
 							id="log-format"
 							bind:value={logFormat}
@@ -245,7 +254,9 @@
 						</select>
 					</div>
 					<div>
-						<label for="log-output" class="block text-sm font-medium text-gray-700 mb-1">Output</label>
+						<label for="log-output" class="block text-sm font-medium text-gray-700 mb-1"
+							>Output</label
+						>
 						<select
 							id="log-output"
 							bind:value={logOutput}

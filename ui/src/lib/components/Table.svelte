@@ -81,11 +81,21 @@
 								<span class="text-gray-400">
 									{#if sortDir === 'asc'}
 										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7" />
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M5 15l7-7 7 7"
+											/>
 										</svg>
 									{:else}
 										<svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+											<path
+												stroke-linecap="round"
+												stroke-linejoin="round"
+												stroke-width="2"
+												d="M19 9l-7 7-7-7"
+											/>
 										</svg>
 									{/if}
 								</span>
@@ -137,7 +147,10 @@
 		</div>
 		<div class="flex items-center gap-2">
 			<span class="text-sm text-gray-700">
-				{(currentPage - 1) * effectivePageSize + 1}-{Math.min(currentPage * effectivePageSize, data.length)} of {data.length}
+				{(currentPage - 1) * effectivePageSize + 1}-{Math.min(
+					currentPage * effectivePageSize,
+					data.length
+				)} of {data.length}
 			</span>
 			<div class="flex gap-1">
 				<button
@@ -148,7 +161,12 @@
 					aria-label="Previous page"
 				>
 					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7" />
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M15 19l-7-7 7-7"
+						/>
 					</svg>
 				</button>
 				<button
@@ -159,7 +177,12 @@
 					aria-label="Next page"
 				>
 					<svg class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7" />
+						<path
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							stroke-width="2"
+							d="M9 5l7 7-7 7"
+						/>
 					</svg>
 				</button>
 			</div>

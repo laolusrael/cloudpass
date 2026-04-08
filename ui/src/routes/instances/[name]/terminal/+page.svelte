@@ -39,14 +39,20 @@
 			<Spinner size="lg" />
 		</div>
 	{:else if error}
-		<div class="flex flex-col items-center justify-center h-full bg-white border border-gray-200 rounded p-8">
+		<div
+			class="flex flex-col items-center justify-center h-full bg-white border border-gray-200 rounded p-8"
+		>
 			<p class="text-red-600 mb-4">{error}</p>
 			<a href="/instances/{name}" class="text-gray-600 hover:text-gray-800">Return to instance</a>
 		</div>
 	{:else if !isRunning}
-		<div class="flex flex-col items-center justify-center h-full bg-white border border-gray-200 rounded p-8">
+		<div
+			class="flex flex-col items-center justify-center h-full bg-white border border-gray-200 rounded p-8"
+		>
 			<p class="text-gray-600 mb-4">Instance is not running</p>
-			<p class="text-sm text-gray-500 mb-4">The terminal requires the instance to be in Running state.</p>
+			<p class="text-sm text-gray-500 mb-4">
+				The terminal requires the instance to be in Running state.
+			</p>
 			<a href="/instances/{name}" class="text-gray-600 hover:text-gray-800">Return to instance</a>
 		</div>
 	{:else}

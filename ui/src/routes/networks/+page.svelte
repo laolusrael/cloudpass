@@ -119,7 +119,9 @@
 {#snippet modalBody()}
 	<div class="space-y-4">
 		<div>
-			<label for="network-name" class="block text-sm font-medium text-gray-700 mb-1">Network Name</label>
+			<label for="network-name" class="block text-sm font-medium text-gray-700 mb-1"
+				>Network Name</label
+			>
 			<input
 				id="network-name"
 				type="text"
@@ -129,7 +131,9 @@
 			/>
 		</div>
 		<div>
-			<label for="network-mode" class="block text-sm font-medium text-gray-700 mb-1">Mode (optional)</label>
+			<label for="network-mode" class="block text-sm font-medium text-gray-700 mb-1"
+				>Mode (optional)</label
+			>
 			<select
 				id="network-mode"
 				bind:value={newNetworkMode}
