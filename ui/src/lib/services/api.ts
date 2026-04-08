@@ -129,11 +129,17 @@ class ApiService {
 		return this.request<{ status: string }>('/health');
 	}
 
-	async createSnapshot(instanceName: string, request: CreateSnapshotRequest): Promise<SnapshotResponse> {
-		return this.request<SnapshotResponse>(`/instances/${encodeURIComponent(instanceName)}/snapshots`, {
-			method: 'POST',
-			body: JSON.stringify(request)
-		});
+	async createSnapshot(
+		instanceName: string,
+		request: CreateSnapshotRequest
+	): Promise<SnapshotResponse> {
+		return this.request<SnapshotResponse>(
+			`/instances/${encodeURIComponent(instanceName)}/snapshots`,
+			{
+				method: 'POST',
+				body: JSON.stringify(request)
+			}
+		);
 	}
 
 	async getSnapshots(instanceName: string): Promise<SnapshotList> {
@@ -193,10 +199,13 @@ class ApiService {
 			formData.append('target_path', targetPath);
 		}
 
-		const response = await fetch(`${API_BASE}/instances/${encodeURIComponent(instanceName)}/upload`, {
-			method: 'POST',
-			body: formData
-		});
+		const response = await fetch(
+			`${API_BASE}/instances/${encodeURIComponent(instanceName)}/upload`,
+			{
+				method: 'POST',
+				body: formData
+			}
+		);
 
 		if (!response.ok) {
 			const error = await response.json();

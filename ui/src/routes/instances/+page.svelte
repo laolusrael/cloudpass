@@ -67,7 +67,13 @@
 			<p class="mt-1 text-sm text-gray-500">Manage all virtual machines</p>
 		</div>
 		<div class="flex gap-3">
-			<Button variant="secondary" onclick={() => { instances.refresh(); jobs.refresh(); }}>Refresh</Button>
+			<Button
+				variant="secondary"
+				onclick={() => {
+					instances.refresh();
+					jobs.refresh();
+				}}>Refresh</Button
+			>
 			<Button variant="primary" onclick={() => (window.location.href = '/instances/new')}>
 				New Instance
 			</Button>

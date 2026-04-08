@@ -26,7 +26,9 @@
 <div class="fixed bottom-4 right-4 z-50 animate-slide-up">
 	<div class="flex items-center gap-3 px-4 py-3 rounded border shadow-lg {colors[type]}">
 		<p class="text-sm font-medium">{message}</p>
-		<button onclick={onclose} class="text-lg leading-none opacity-60 hover:opacity-100">&times;</button>
+		<button onclick={onclose} class="text-lg leading-none opacity-60 hover:opacity-100"
+			>&times;</button
+		>
 	</div>
 </div>
 

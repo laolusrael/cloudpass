@@ -41,16 +41,15 @@
 
 	const filteredOptions = $derived(
 		searchable && searchTerm
-			? options.filter(opt =>
-				opt.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
-				opt.value.toLowerCase().includes(searchTerm.toLowerCase())
-			)
+			? options.filter(
+					(opt) =>
+						opt.label.toLowerCase().includes(searchTerm.toLowerCase()) ||
+						opt.value.toLowerCase().includes(searchTerm.toLowerCase())
+				)
 			: options
 	);
 
-	const selectedLabel = $derived(
-		options.find(opt => opt.value === value)?.label || ''
-	);
+	const selectedLabel = $derived(options.find((opt) => opt.value === value)?.label || '');
 
 	function handleSelect(option: Option) {
 		value = option.value;
@@ -99,7 +98,7 @@
 		</label>
 	{/if}
 
-	<div class="relative" bind:this={selectEl} id={id}>
+	<div class="relative" bind:this={selectEl} {id}>
 		<button
 			type="button"
 			onclick={toggleDropdown}
@@ -110,7 +109,7 @@
 				disabled:bg-gray-100 disabled:cursor-not-allowed
 				{error ? 'border-red-500' : 'border-gray-300'}"
 		>
-			<span class="{value ? 'text-gray-900' : 'text-gray-400'}">
+			<span class={value ? 'text-gray-900' : 'text-gray-400'}>
 				{selectedLabel || placeholder}
 			</span>
 			<svg

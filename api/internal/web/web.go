@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
+	"path/filepath"
 
 	"github.com/labstack/echo/v4"
 )
@@ -62,32 +63,26 @@ func StaticHandlerWithFallback() echo.HandlerFunc {
 }
 
 func getContentType(path string) string {
-	if len(path) >= 4 {
-		ext := path[len(path)-4:]
-		switch ext {
-		case ".html", "html":
-			return "text/html"
-		case ".woff", "woff":
-			return "font/woff"
-		case ".woff2", "woff2":
-			return "font/woff2"
-		}
+	ext := filepath.Ext(path)
+	switch ext {
+	case ".js", "js":
+		return "application/javascript"
+	case ".css", "css":
+		return "text/css"
+	case ".png", "png":
+		return "image/png"
+	case ".jpg", "jpg":
+		return "image/jpeg"
+	case ".svg", "svg":
+		return "image/svg+xml"
+	case ".html", "html":
+		return "text/html"
+	case ".woff", "woff":
+		return "font/woff"
+	case ".woff2", "woff2":
+		return "font/woff2"
 	}
-	if len(path) >= 3 {
-		ext := path[len(path)-3:]
-		switch ext {
-		case ".js", "js":
-			return "application/javascript"
-		case ".css", "css":
-			return "text/css"
-		case ".png", "png":
-			return "image/png"
-		case ".jpg", "jpg":
-			return "image/jpeg"
-		case ".svg", "svg":
-			return "image/svg+xml"
-		}
-	}
+
 	return "text/plain"
 }
 

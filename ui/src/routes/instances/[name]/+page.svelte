@@ -272,7 +272,9 @@
 					<h3 class="text-sm font-medium text-gray-500">Mounts</h3>
 					{#if isRunning}
 						<div class="flex gap-2">
-							<Button variant="secondary" onclick={() => (showUploadModal = true)}>Upload File</Button>
+							<Button variant="secondary" onclick={() => (showUploadModal = true)}
+								>Upload File</Button
+							>
 							<Button variant="secondary" onclick={() => (showMountModal = true)}>Add Mount</Button>
 						</div>
 					{/if}
@@ -287,7 +289,9 @@
 									<span class="font-mono">{mount.target}</span>
 								</span>
 								{#if isRunning}
-									<Button variant="danger" onclick={() => handleUnmount(mount.target)}>Unmount</Button>
+									<Button variant="danger" onclick={() => handleUnmount(mount.target)}
+										>Unmount</Button
+									>
 								{/if}
 							</li>
 						{/each}
@@ -309,7 +313,8 @@
 		<div class="bg-white rounded-lg p-6 w-full max-w-md">
 			<h3 class="text-lg font-medium mb-4">Add Mount</h3>
 			<p class="text-sm text-gray-500 mb-4">
-				Enter the host path to mount into the instance. If the path does not exist, you will be prompted to create it.
+				Enter the host path to mount into the instance. If the path does not exist, you will be
+				prompted to create it.
 			</p>
 			<div class="space-y-4">
 				<div>
@@ -356,20 +361,13 @@
 	</div>
 {/if}
 
-<input
-	type="file"
-	bind:this={fileInput}
-	onchange={() => (showUploadModal = true)}
-	class="hidden"
-/>
+<input type="file" bind:this={fileInput} onchange={() => (showUploadModal = true)} class="hidden" />
 
 {#if showUploadModal}
 	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
 		<div class="bg-white rounded-lg p-6 w-full max-w-md">
 			<h3 class="text-lg font-medium mb-4">Upload File</h3>
-			<p class="text-sm text-gray-500 mb-4">
-				Select a file to upload to the instance.
-			</p>
+			<p class="text-sm text-gray-500 mb-4">Select a file to upload to the instance.</p>
 			<div class="space-y-4">
 				<div>
 					<label for="upload-target" class="block text-sm font-medium text-gray-700 mb-1">

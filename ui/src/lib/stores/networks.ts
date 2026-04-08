@@ -13,10 +13,10 @@ function createNetworksStore() {
 			set(data.networks);
 		},
 		add(network: Network) {
-			update(networks => [...networks, network]);
+			update((networks) => [...networks, network]);
 		},
 		remove(name: string) {
-			update(networks => networks.filter(n => n.name !== name));
+			update((networks) => networks.filter((n) => n.name !== name));
 		}
 	};
 }

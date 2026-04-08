@@ -14,9 +14,9 @@ function createNotificationsStore() {
 		subscribe,
 		show(message: string, type: Notification['type'] = 'info') {
 			const notification: Notification = { id: ++id, message, type };
-			update(n => [...n, notification]);
+			update((n) => [...n, notification]);
 			setTimeout(() => {
-				update(n => n.filter(item => item.id !== notification.id));
+				update((n) => n.filter((item) => item.id !== notification.id));
 			}, 5000);
 		},
 		success(message: string) {
@@ -29,7 +29,7 @@ function createNotificationsStore() {
 			this.show(message, 'info');
 		},
 		remove(id: number) {
-			update(n => n.filter(item => item.id !== id));
+			update((n) => n.filter((item) => item.id !== id));
 		}
 	};
 }

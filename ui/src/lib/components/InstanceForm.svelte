@@ -25,7 +25,11 @@
 	const imageOptions = $derived(
 		$images.map((img: Image) => ({
 			value: img.alias || img.release,
-			label: img.os ? `${img.os} ${img.release || img.alias} (${img.alias || img.version})` : (img.release ? `${img.release} (${img.alias || img.version})` : img.alias)
+			label: img.os
+				? `${img.os} ${img.release || img.alias} (${img.alias || img.version})`
+				: img.release
+					? `${img.release} (${img.alias || img.version})`
+					: img.alias
 		}))
 	);
 
@@ -82,9 +86,7 @@
 	/>
 
 	<div class="flex justify-end gap-3 pt-4">
-		<Button variant="secondary" type="button" onclick={onCancel}>
-			Cancel
-		</Button>
+		<Button variant="secondary" type="button" onclick={onCancel}>Cancel</Button>
 		<Button variant="primary" type="submit" disabled={loading}>
 			{loading ? 'Creating...' : 'Create Instance'}
 		</Button>
