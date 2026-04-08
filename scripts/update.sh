@@ -105,9 +105,17 @@ else
     warn "No new binary found, keeping existing"
 fi
 
-if [ -f "$SOURCE_DIR/config.yaml" ]; then
-    cp "$SOURCE_DIR/config.yaml" "$INSTALL_DIR/config.yaml"
-    info "Config updated"
+EXISTING_CONFIG="$INSTALL_DIR/config.yaml"
+NEW_CONFIG="$SOURCE_DIR/config.yaml"
+
+if [ -f "$NEW_CONFIG" ]; then
+    if [ -f "$EXISTING_CONFIG" ]; then
+        warn "Config already exists at $EXISTING_CONFIG, keeping existing config"
+        warn "To update config, manually copy: cp $NEW_CONFIG $EXISTING_CONFIG"
+    else
+        cp "$NEW_CONFIG" "$EXISTING_CONFIG"
+        info "Config created"
+    fi
 else
     warn "No new config found, keeping existing"
 fi
