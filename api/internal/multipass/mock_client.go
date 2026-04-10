@@ -236,3 +236,34 @@ func (m *MockClient) ImportInstance(imagePath string, name string, cpus int, mem
 func (m *MockClient) Authenticate(passphrase string) error {
 	return nil
 }
+
+func (m *MockClient) GetHostInfo() (*models.HostInfo, error) {
+	return &models.HostInfo{
+		CPUCores:        8,
+		CPUAvailable:    6,
+		CPUReserved:     2,
+		MemoryBytes:     16 * 1024 * 1024 * 1024,
+		MemoryAvailable: 14 * 1024 * 1024 * 1024,
+		MemoryReserved:  2 * 1024 * 1024 * 1024,
+		DiskBytes:       500 * 1024 * 1024 * 1024,
+		DiskAvailable:   500 * 1024 * 1024 * 1024,
+	}, nil
+}
+
+func (m *MockClient) SetInstanceResources(name string, cpus int, memory string, disk string) error {
+	for i, inst := range m.instances {
+		if inst.Name == name {
+			if cpus > 0 {
+				m.instances[i].CPU = cpus
+			}
+			if memory != "" {
+				m.instances[i].Memory = memory
+			}
+			if disk != "" {
+				m.instances[i].Disk = disk
+			}
+			return nil
+		}
+	}
+	return fmt.Errorf("instance %q not found", name)
+}

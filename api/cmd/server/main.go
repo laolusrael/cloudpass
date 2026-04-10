@@ -101,6 +101,7 @@ func main() {
 	configHandler := handlers.NewConfigHandler(configPath)
 	terminalHandler := websocket.NewTerminalHandler(mpClient, cfg.Multipass.SSHKeyPath)
 	jobHandler := handlers.NewJobHandler(mpClient, cfg.Multipass.DefaultTimeoutSec, jobStorage, eventHub)
+	hostHandler := handlers.NewHostHandler(mpClient, cfg)
 
 	jobStorage.Cleanup(24 * time.Hour)
 
@@ -145,6 +146,7 @@ func main() {
 	api.POST("/instances/:name/mounts", instanceHandler.Mount)
 	api.DELETE("/instances/:name/mounts", instanceHandler.Unmount)
 	api.POST("/instances/:name/upload", instanceHandler.Upload)
+	api.PUT("/instances/:name/resources", instanceHandler.UpdateResources)
 	api.GET("/instances/:name/terminal", terminalHandler.HandleTerminal)
 
 	api.GET("/images", imageHandler.List)
@@ -156,6 +158,7 @@ func main() {
 	api.GET("/jobs/stream", jobHandler.Stream)
 	api.GET("/config", configHandler.Get)
 	api.POST("/config", configHandler.Update)
+	api.GET("/host", hostHandler.GetInfo)
 
 	e.GET("/*", web.StaticHandlerWithFallback())
 

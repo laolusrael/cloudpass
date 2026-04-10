@@ -226,3 +226,20 @@ type LoggingUpdateRequest struct {
 	Format string `json:"format,omitempty"`
 	Output string `json:"output,omitempty"`
 }
+
+type HostInfo struct {
+	CPUCores        int64 `json:"cpu_cores"`
+	CPUAvailable    int64 `json:"cpu_available"`
+	CPUReserved     int64 `json:"cpu_reserved"`
+	MemoryBytes     int64 `json:"memory_bytes"`
+	MemoryAvailable int64 `json:"memory_available"`
+	MemoryReserved  int64 `json:"memory_reserved"`
+	DiskBytes       int64 `json:"disk_bytes"`
+	DiskAvailable   int64 `json:"disk_available"`
+}
+
+type UpdateResourcesRequest struct {
+	CPUs   int    `json:"cpus"`
+	Memory string `json:"memory"`
+	Disk   string `json:"disk"`
+}

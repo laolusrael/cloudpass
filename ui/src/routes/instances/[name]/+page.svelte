@@ -3,13 +3,15 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/services/api';
-	import type { Instance } from '$lib/types';
+	import type { Instance, HostInfo, UpdateResourcesRequest } from '$lib/types';
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Badge from '$lib/components/Badge.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import InstanceResourcesModal from '$lib/components/InstanceResourcesModal.svelte';
 
 	let instance = $state<Instance | null>(null);
+	let hostInfo = $state<HostInfo | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let showMountModal = $state(false);
@@ -19,6 +21,7 @@
 	let showUploadModal = $state(false);
 	let uploadTargetPath = $state('');
 	let uploading = $state(false);
+	let showEditResourcesModal = $state(false);
 	let fileInput: HTMLInputElement;
 
 	const name = $derived($page.params.name);
@@ -35,8 +38,17 @@
 		}
 	}
 
+	async function loadHostInfo() {
+		try {
+			hostInfo = await api.getHostInfo();
+		} catch (e) {
+			console.error('Failed to load host info:', e);
+		}
+	}
+
 	onMount(() => {
 		loadInstance();
+		loadHostInfo();
 	});
 
 	async function handleStart() {
@@ -152,6 +164,12 @@
 		}
 	}
 
+	async function handleUpdateResources(request: UpdateResourcesRequest) {
+		if (!instance) return;
+		await api.updateInstanceResources(instance.name, request);
+		await loadInstance();
+	}
+
 	const isRunning = $derived(instance?.state === 'Running');
 	const isStopped = $derived(instance?.state === 'Stopped');
 </script>
@@ -175,6 +193,11 @@
 				<a href="/instances/{name}/snapshots">
 					<Button variant="secondary">Snapshots</Button>
 				</a>
+				{#if isStopped && hostInfo}
+					<Button variant="secondary" onclick={() => (showEditResourcesModal = true)}
+						>Edit Resources</Button
+					>
+				{/if}
 				{#if isRunning}
 					<a href="/instances/{name}/terminal">
 						<Button variant="secondary">Terminal</Button>
@@ -395,4 +418,13 @@
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if showEditResourcesModal && instance && hostInfo}
+	<InstanceResourcesModal
+		{instance}
+		{hostInfo}
+		onclose={() => (showEditResourcesModal = false)}
+		onsave={handleUpdateResources}
+	/>
 {/if}
