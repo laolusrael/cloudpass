@@ -234,3 +234,20 @@ export interface ConfigUpdateRequest {
 		output?: string;
 	};
 }
+
+export interface HostInfo {
+	cpu_cores: number;
+	cpu_available: number;
+	cpu_reserved: number;
+	memory_bytes: number;
+	memory_available: number;
+	memory_reserved: number;
+	disk_bytes: number;
+	disk_available: number;
+}
+
+export interface UpdateResourcesRequest {
+	cpus: number;
+	memory: string;
+	disk: string;
+}

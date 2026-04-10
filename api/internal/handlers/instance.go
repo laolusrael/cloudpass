@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -904,4 +905,197 @@ func (h *InstanceHandler) Upload(c echo.Context) error {
 		Message: "File uploaded",
 		Path:    targetPath,
 	})
+}
+
+func (h *InstanceHandler) UpdateResources(c echo.Context) error {
+	name := c.Param("name")
+	if name == "" {
+		logger.API.Warn().Str("ip", c.RealIP()).Msg("instance name is required")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "instance name is required",
+		})
+	}
+
+	if err := validateInstanceName(name); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+		})
+	}
+
+	var req models.UpdateResourcesRequest
+	if err := c.Bind(&req); err != nil {
+		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Msg("invalid request body")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "invalid request body",
+		})
+	}
+
+	instance, err := h.client.GetInstance(name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") {
+			logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
+			return c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "not_found",
+				Message: err.Error(),
+			})
+		}
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to get instance")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "multipass_error",
+			Message: err.Error(),
+		})
+	}
+
+	if instance.State != "Stopped" {
+		logger.API.Warn().Str("ip", c.RealIP()).Str("name", name).Str("state", instance.State).Msg("instance must be stopped")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "instance_not_stopped",
+			Message: fmt.Sprintf("instance must be stopped to modify resources (current state: %s)", instance.State),
+		})
+	}
+
+	hostInfo, err := h.client.GetHostInfo()
+	if err != nil {
+		logger.API.Error().Err(err).Msg("failed to get host info")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "host_error",
+			Message: "failed to get host information",
+		})
+	}
+
+	if req.CPUs > 0 && int64(req.CPUs) > hostInfo.CPUAvailable {
+		logger.API.Warn().Str("ip", c.RealIP()).Int("requested", req.CPUs).Int64("available", hostInfo.CPUAvailable).Msg("CPU exceeds available")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "resource_exceeds_host",
+			Message: fmt.Sprintf("requested CPUs (%d) exceeds available host CPUs (%d)", req.CPUs, hostInfo.CPUAvailable),
+		})
+	}
+
+	if req.Memory != "" {
+		reqBytes, err := parseMemoryString(req.Memory)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: "invalid memory format",
+			})
+		}
+		if reqBytes > hostInfo.MemoryAvailable {
+			logger.API.Warn().Str("ip", c.RealIP()).Int64("requested", reqBytes).Int64("available", hostInfo.MemoryAvailable).Msg("memory exceeds available")
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "resource_exceeds_host",
+				Message: fmt.Sprintf("requested memory (%s) exceeds available host memory (%s)", req.Memory, formatBytesHost(hostInfo.MemoryAvailable)),
+			})
+		}
+	}
+
+	if req.Disk != "" {
+		currentDiskBytes := parseDiskString(instance.Disk)
+		reqDiskBytes, err := parseMemoryString(req.Disk)
+		if err != nil {
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: "invalid disk format",
+			})
+		}
+		if reqDiskBytes < currentDiskBytes {
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: "disk size can only be increased, not decreased",
+			})
+		}
+		if reqDiskBytes > hostInfo.DiskAvailable {
+			logger.API.Warn().Str("ip", c.RealIP()).Int64("requested", reqDiskBytes).Int64("available", hostInfo.DiskAvailable).Msg("disk exceeds available")
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "resource_exceeds_host",
+				Message: fmt.Sprintf("requested disk (%s) exceeds available host disk (%s)", req.Disk, formatBytesHost(hostInfo.DiskAvailable)),
+			})
+		}
+	}
+
+	err = h.client.SetInstanceResources(name, req.CPUs, req.Memory, req.Disk)
+	if err != nil {
+		logger.API.Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to update resources")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "multipass_error",
+			Message: err.Error(),
+		})
+	}
+
+	logger.API.Info().Str("ip", c.RealIP()).Str("name", name).Msg("instance resources updated")
+	return c.JSON(http.StatusOK, models.InstanceResponse{
+		Message: "Instance resources updated",
+	})
+}
+
+func parseMemoryString(s string) (int64, error) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, nil
+	}
+
+	var multiplier int64 = 1
+	if strings.HasSuffix(s, "B") {
+		if len(s) > 1 {
+			s = s[:len(s)-1]
+			if strings.HasSuffix(s, "K") || strings.HasSuffix(s, "k") {
+				multiplier = 1024
+				s = s[:len(s)-1]
+			} else if strings.HasSuffix(s, "M") || strings.HasSuffix(s, "m") {
+				multiplier = 1024 * 1024
+				s = s[:len(s)-1]
+			} else if strings.HasSuffix(s, "G") || strings.HasSuffix(s, "g") {
+				multiplier = 1024 * 1024 * 1024
+				s = s[:len(s)-1]
+			} else if strings.HasSuffix(s, "T") || strings.HasSuffix(s, "t") {
+				multiplier = 1024 * 1024 * 1024 * 1024
+				s = s[:len(s)-1]
+			}
+		}
+	} else if strings.HasSuffix(s, "K") || strings.HasSuffix(s, "k") {
+		multiplier = 1024
+		s = s[:len(s)-1]
+	} else if strings.HasSuffix(s, "M") || strings.HasSuffix(s, "m") {
+		multiplier = 1024 * 1024
+		s = s[:len(s)-1]
+	} else if strings.HasSuffix(s, "G") || strings.HasSuffix(s, "g") {
+		multiplier = 1024 * 1024 * 1024
+		s = s[:len(s)-1]
+	} else if strings.HasSuffix(s, "T") || strings.HasSuffix(s, "t") {
+		multiplier = 1024 * 1024 * 1024 * 1024
+		s = s[:len(s)-1]
+	}
+
+	val, err := strconv.ParseInt(s, 10, 64)
+	if err != nil {
+		return 0, err
+	}
+	return val * multiplier, nil
+}
+
+func parseDiskString(s string) int64 {
+	if s == "" {
+		return 0
+	}
+	val, _ := parseMemoryString(s)
+	return val
+}
+
+func formatBytesHost(n int64) string {
+	if n == 0 {
+		return "0 B"
+	}
+	const unit = 1024
+	if n < unit {
+		return fmt.Sprintf("%d B", n)
+	}
+	div, exp := uint64(unit), 0
+	for n >= int64(div*unit) {
+		div *= unit
+		exp++
+	}
+	return fmt.Sprintf("%.1f %cB", float64(n)/float64(div), "KMGTPE"[exp])
 }
