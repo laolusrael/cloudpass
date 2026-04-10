@@ -100,6 +100,8 @@
 		terminal.open(terminalContainer);
 		fitAddon.fit();
 
+		handleResize();
+
 		terminal.onData((data) => {
 			if (ws && ws.readyState === WebSocket.OPEN) {
 				ws.send(new TextEncoder().encode(data));
