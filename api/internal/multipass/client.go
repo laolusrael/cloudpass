@@ -44,6 +44,8 @@ type Client interface {
 	DeleteSnapshot(instanceName string, snapshotName string) error
 	ExportInstance(instanceName string, outputPath string) (string, error)
 	ImportInstance(imagePath string, name string, cpus int, memory string, disk string) (*models.Instance, error)
+	GetHostInfo() (*models.HostInfo, error)
+	SetInstanceResources(name string, cpus int, memory string, disk string) error
 }
 
 type multipassClient struct {
@@ -987,6 +989,205 @@ func (c *multipassClient) ImportInstance(imagePath string, name string, cpus int
 	}
 
 	return c.GetInstance(name)
+}
+
+func (c *multipassClient) GetHostInfo() (*models.HostInfo, error) {
+	const (
+		cpuReserved    int64 = 2
+		memoryReserved int64 = 2 * 1024 * 1024 * 1024
+	)
+
+	var cpuCores int64
+	var memoryBytes int64
+	var diskBytes int64
+
+	switch runtime.GOOS {
+	case "windows":
+		cmd := exec.Command("powershell", "-Command", "(Get-CimInstance Win32_Processor).NumberOfLogicalProcessors")
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get CPU count: %w", err)
+		}
+		n, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse CPU count: %w", err)
+		}
+		cpuCores = n
+
+		cmd = exec.Command("powershell", "-Command", "(Get-CimInstance Win32_OperatingSystem).TotalVisibleMemorySize * 1024")
+		out, err = cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get memory: %w", err)
+		}
+		n, err = strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse memory: %w", err)
+		}
+		memoryBytes = n
+
+		cmd = exec.Command("powershell", "-Command", "(Get-PSDrive C).Free * 1024")
+		out, err = cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get disk space: %w", err)
+		}
+		n, err = strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse disk space: %w", err)
+		}
+		diskBytes = n
+
+	case "darwin":
+		cmd := exec.Command("sysctl", "-n", "hw.ncpu")
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get CPU count: %w", err)
+		}
+		n, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse CPU count: %w", err)
+		}
+		cpuCores = n
+
+		cmd = exec.Command("sysctl", "-n", "hw.memsize")
+		out, err = cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get memory: %w", err)
+		}
+		n, err = strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse memory: %w", err)
+		}
+		memoryBytes = n
+
+		cmd = exec.Command("df", "-bk", "/")
+		out, err = cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get disk space: %w", err)
+		}
+		lines := strings.Split(string(out), "\n")
+		if len(lines) >= 2 {
+			fields := strings.Fields(lines[1])
+			if len(fields) >= 4 {
+				n, err = strconv.ParseInt(fields[3], 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse disk space: %w", err)
+				}
+				diskBytes = n * 1024
+			}
+		}
+
+	case "linux":
+		cmd := exec.Command("nproc")
+		out, err := cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get CPU count: %w", err)
+		}
+		n, err := strconv.ParseInt(strings.TrimSpace(string(out)), 10, 64)
+		if err != nil {
+			return nil, fmt.Errorf("failed to parse CPU count: %w", err)
+		}
+		cpuCores = n
+
+		cmd = exec.Command("free", "-b")
+		out, err = cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get memory: %w", err)
+		}
+		lines := strings.Split(string(out), "\n")
+		for _, line := range lines {
+			fields := strings.Fields(line)
+			if len(fields) >= 2 && fields[0] == "Mem:" {
+				n, err = strconv.ParseInt(fields[1], 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse memory: %w", err)
+				}
+				memoryBytes = n
+				break
+			}
+		}
+
+		cmd = exec.Command("df", "-B1", "/")
+		out, err = cmd.Output()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get disk space: %w", err)
+		}
+		lines = strings.Split(string(out), "\n")
+		if len(lines) >= 2 {
+			fields := strings.Fields(lines[1])
+			if len(fields) >= 4 {
+				n, err = strconv.ParseInt(fields[3], 10, 64)
+				if err != nil {
+					return nil, fmt.Errorf("failed to parse disk space: %w", err)
+				}
+				diskBytes = n
+			}
+		}
+
+	default:
+		return nil, fmt.Errorf("unsupported platform: %s", runtime.GOOS)
+	}
+
+	cpuAvailable := cpuCores - cpuReserved
+	if cpuAvailable < 1 {
+		cpuAvailable = 1
+	}
+
+	memoryAvailable := memoryBytes - memoryReserved
+	if memoryAvailable < 512*1024*1024 {
+		memoryAvailable = 512 * 1024 * 1024
+	}
+
+	return &models.HostInfo{
+		CPUCores:        cpuCores,
+		CPUAvailable:    cpuAvailable,
+		CPUReserved:     cpuReserved,
+		MemoryBytes:     memoryBytes,
+		MemoryAvailable: memoryAvailable,
+		MemoryReserved:  memoryReserved,
+		DiskBytes:       diskBytes,
+		DiskAvailable:   diskBytes,
+	}, nil
+}
+
+func (c *multipassClient) SetInstanceResources(name string, cpus int, memory string, disk string) error {
+	instance, err := c.GetInstance(name)
+	if err != nil {
+		return fmt.Errorf("failed to get instance: %w", err)
+	}
+
+	if instance.State != "Stopped" {
+		return fmt.Errorf("instance must be stopped to modify resources (current state: %s)", instance.State)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	if cpus > 0 {
+		logger.Multipass.Info().Str("name", name).Int("cpus", cpus).Msg("setting CPU")
+		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.cpus", name), strconv.Itoa(cpus))
+		if _, err := cmd.Output(); err != nil {
+			return fmt.Errorf("failed to set CPU: %w", err)
+		}
+	}
+
+	if memory != "" {
+		logger.Multipass.Info().Str("name", name).Str("memory", memory).Msg("setting memory")
+		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.memory", name), memory)
+		if _, err := cmd.Output(); err != nil {
+			return fmt.Errorf("failed to set memory: %w", err)
+		}
+	}
+
+	if disk != "" {
+		logger.Multipass.Info().Str("name", name).Str("disk", disk).Msg("setting disk")
+		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.disk", name), disk)
+		if _, err := cmd.Output(); err != nil {
+			return fmt.Errorf("failed to set disk: %w", err)
+		}
+	}
+
+	logger.Multipass.Info().Str("name", name).Msg("instance resources updated")
+	return nil
 }
 
 func parseCPU(cpuStr string) int {

@@ -19,7 +19,9 @@ import type {
 	ConfigUpdateRequest,
 	Job,
 	JobResponse,
-	JobListResponse
+	JobListResponse,
+	HostInfo,
+	UpdateResourcesRequest
 } from '$lib/types';
 
 const API_BASE = '/api';
@@ -224,6 +226,23 @@ class ApiService {
 			method: 'POST',
 			body: JSON.stringify(request)
 		});
+	}
+
+	async getHostInfo(): Promise<HostInfo> {
+		return this.request<HostInfo>('/host');
+	}
+
+	async updateInstanceResources(
+		instanceName: string,
+		request: UpdateResourcesRequest
+	): Promise<InstanceResponse> {
+		return this.request<InstanceResponse>(
+			`/instances/${encodeURIComponent(instanceName)}/resources`,
+			{
+				method: 'PUT',
+				body: JSON.stringify(request)
+			}
+		);
 	}
 }
 
