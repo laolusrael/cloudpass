@@ -48,6 +48,19 @@ func (m *MockClient) GetInstance(name string) (*models.Instance, error) {
 	return nil, nil
 }
 
+func (m *MockClient) GetInstanceResources(name string) (*models.InstanceResources, error) {
+	for _, inst := range m.instances {
+		if inst.Name == name {
+			return &models.InstanceResources{
+				CPUs:   inst.CPU,
+				Memory: inst.Memory,
+				Disk:   inst.Disk,
+			}, nil
+		}
+	}
+	return nil, fmt.Errorf("instance %q not found", name)
+}
+
 func (m *MockClient) GetInstanceIP(name string) (string, error) {
 	inst, err := m.GetInstance(name)
 	if err != nil {

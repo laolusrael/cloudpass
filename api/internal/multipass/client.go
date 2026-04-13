@@ -20,6 +20,7 @@ type Client interface {
 	Authenticate(passphrase string) error
 	ListInstances() ([]models.Instance, error)
 	GetInstance(name string) (*models.Instance, error)
+	GetInstanceResources(name string) (*models.InstanceResources, error)
 	GetInstanceIP(name string) (string, error)
 	CreateInstance(opts models.CreateInstanceRequest) (*models.Instance, error)
 	LaunchInstanceBackground(opts models.CreateInstanceRequest) error
@@ -207,7 +208,69 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 		}
 	}
 
+	// For stopped instances, multipass info may return empty/zero values for resources
+	// Fall back to multipass get to get the configured values
+	if instance.CPU == 0 || instance.Memory == "" || instance.Disk == "" {
+		resources, err := c.GetInstanceResources(name)
+		if err == nil {
+			if instance.CPU == 0 && resources.CPUs > 0 {
+				instance.CPU = resources.CPUs
+			}
+			if instance.Memory == "" && resources.Memory != "" {
+				instance.Memory = resources.Memory
+			}
+			if instance.Disk == "" && resources.Disk != "" {
+				instance.Disk = resources.Disk
+			}
+		}
+	}
+
 	return instance, nil
+}
+
+func (c *multipassClient) GetInstanceResources(name string) (*models.InstanceResources, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	resources := &models.InstanceResources{}
+
+	cpusCmd := exec.CommandContext(ctx, "multipass", "get", fmt.Sprintf("local.%s.cpus", name))
+	cpusOutput, err := cpusCmd.Output()
+	if err != nil {
+		logger.Multipass.Debug().Str("name", name).Err(err).Msg("failed to get CPU config")
+	} else {
+		cpus, err := strconv.Atoi(strings.TrimSpace(string(cpusOutput)))
+		if err != nil {
+			logger.Multipass.Warn().Str("name", name).Err(err).Msg("failed to parse CPU config")
+		} else {
+			resources.CPUs = cpus
+		}
+	}
+
+	memoryCmd := exec.CommandContext(ctx, "multipass", "get", fmt.Sprintf("local.%s.memory", name))
+	memoryOutput, err := memoryCmd.Output()
+	if err != nil {
+		logger.Multipass.Debug().Str("name", name).Err(err).Msg("failed to get memory config")
+	} else {
+		resources.Memory = strings.TrimSpace(string(memoryOutput))
+	}
+
+	diskCmd := exec.CommandContext(ctx, "multipass", "get", fmt.Sprintf("local.%s.disk", name))
+	diskOutput, err := diskCmd.Output()
+	if err != nil {
+		logger.Multipass.Debug().Str("name", name).Err(err).Msg("failed to get disk config")
+	} else {
+		resources.Disk = strings.TrimSpace(string(diskOutput))
+	}
+
+	logger.Multipass.Debug().
+		Str("name", name).
+		Int("cpus", resources.CPUs).
+		Str("memory", resources.Memory).
+		Str("disk", resources.Disk).
+		Msg("got instance resources config")
+
+	return resources, nil
 }
 
 func (c *multipassClient) GetInstanceIP(name string) (string, error) {

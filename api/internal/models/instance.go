@@ -243,3 +243,9 @@ type UpdateResourcesRequest struct {
 	Memory string `json:"memory"`
 	Disk   string `json:"disk"`
 }
+
+type InstanceResources struct {
+	CPUs   int    `json:"cpus"`
+	Memory string `json:"memory"`
+	Disk   string `json:"disk"`
+}
