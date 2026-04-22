@@ -29,6 +29,14 @@ func NewInstanceHandler(client multipass.Client, cfg *config.Config) *InstanceHa
 
 var instanceNameRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
 
+func validatePathTraversal(path string) error {
+	cleaned := filepath.Clean(path)
+	if strings.Contains(cleaned, "..") || strings.HasPrefix(cleaned, "/..") || strings.HasPrefix(cleaned, "..") {
+		return errors.New("path contains invalid traversal characters")
+	}
+	return nil
+}
+
 func validateInstanceName(name string) error {
 	if name == "" {
 		return errors.New("instance name is required")
@@ -876,6 +884,14 @@ func (h *InstanceHandler) Upload(c echo.Context) error {
 	targetPath := c.FormValue("target_path")
 	if targetPath == "" {
 		targetPath = filepath.Join(h.cfg.Upload.DefaultPath, file.Filename)
+	}
+
+	if err := validatePathTraversal(targetPath); err != nil {
+		logger.API.Warn().Str("ip", c.RealIP()).Str("path", targetPath).Msg("invalid target path")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+		})
 	}
 
 	if err := h.client.UploadFile(name, tmpFile, targetPath); err != nil {
