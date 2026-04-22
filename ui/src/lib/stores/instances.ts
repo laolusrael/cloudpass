@@ -3,6 +3,8 @@ import type { Instance } from '$lib/types';
 import { api } from '$lib/services/api';
 
 const STORED_NOTIFICATION_KEY = 'cloudpass_pending_notifications';
+const MAX_JOB_POLL_ATTEMPTS = 180; // 180 * 2s = 6 minutes timeout
+const JOB_POLL_INTERVAL_MS = 2000;
 
 export interface StoredNotification {
 	instanceName: string;
@@ -16,23 +18,25 @@ function createInstancesStore() {
 	const loading = writable(false);
 	const error = writable<string | null>(null);
 
+	const refresh = async () => {
+		loading.set(true);
+		error.set(null);
+		try {
+			const instances = await api.getInstances();
+			set(instances);
+		} catch (e) {
+			error.set(e instanceof Error ? e.message : 'Failed to load instances');
+		} finally {
+			loading.set(false);
+		}
+	};
+
 	return {
 		subscribe,
 		loading: { subscribe: loading.subscribe },
 		error: { subscribe: error.subscribe },
 
-		async refresh() {
-			loading.set(true);
-			error.set(null);
-			try {
-				const instances = await api.getInstances();
-				set(instances);
-			} catch (e) {
-				error.set(e instanceof Error ? e.message : 'Failed to load instances');
-			} finally {
-				loading.set(false);
-			}
-		},
+		refresh,
 
 		async create(request: Parameters<typeof api.createInstance>[0]) {
 			loading.set(true);
@@ -60,8 +64,8 @@ function createInstancesStore() {
 				const job = await api.createInstanceAsync(request);
 
 				const pollJob = async (): Promise<Instance> => {
-					for (;;) {
-						await new Promise((resolve) => setTimeout(resolve, 2000));
+					for (let attempt = 0; attempt < MAX_JOB_POLL_ATTEMPTS; attempt++) {
+						await new Promise((resolve) => setTimeout(resolve, JOB_POLL_INTERVAL_MS));
 
 						const updatedJob = await api.getJob(job.id);
 
@@ -96,6 +100,8 @@ function createInstancesStore() {
 							throw new Error(updatedJob.error || 'Instance creation failed');
 						}
 					}
+
+					throw new Error('Instance creation timed out after ' + (MAX_JOB_POLL_ATTEMPTS * JOB_POLL_INTERVAL_MS / 1000) + ' seconds');
 				};
 
 				return await pollJob();
@@ -123,17 +129,17 @@ function createInstancesStore() {
 
 		async start(name: string) {
 			await api.startInstance(name);
-			await this.refresh();
+			await refresh();
 		},
 
 		async stop(name: string) {
 			await api.stopInstance(name);
-			await this.refresh();
+			await refresh();
 		},
 
 		async restart(name: string) {
 			await api.restartInstance(name);
-			await this.refresh();
+			await refresh();
 		}
 	};
 }
