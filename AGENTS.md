@@ -8,10 +8,10 @@
 
 | Topic | Location |
 |-------|----------|
-| Project Plan | [PROJECT_PLAN.md](PROJECT_PLAN.md) |
-| Architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| API Spec | [PROJECT_PLAN.md#4-api-specification](PROJECT_PLAN.md#4-api-specification) |
-| Tech Stack | [PROJECT_PLAN.md#2-technology-stack](PROJECT_PLAN.md#2-technology-stack) |
+| Project Plan | [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) |
+| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| API Spec | [docs/PROJECT_PLAN.md#4-api-specification](docs/PROJECT_PLAN.md#4-api-specification) |
+| Tech Stack | [docs/PROJECT_PLAN.md#2-technology-stack](docs/PROJECT_PLAN.md#2-technology-stack) |
 | Multipass CLI Ref | [docs/MULTIPASS_API_REFERENCE.md](docs/MULTIPASS_API_REFERENCE.md) |
 
 ---
@@ -251,9 +251,9 @@ ui/
 
 | Issue | Resource |
 |-------|----------|
-| Project details | [PROJECT_PLAN.md](PROJECT_PLAN.md) |
-| Architecture | [ARCHITECTURE.md](ARCHITECTURE.md) |
-| API specification | [PROJECT_PLAN.md#4-api-specification](PROJECT_PLAN.md#4-api-specification) |
+| Project details | [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) |
+| Architecture | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| API specification | [docs/PROJECT_PLAN.md#4-api-specification](docs/PROJECT_PLAN.md#4-api-specification) |
 | Multipass CLI Ref | [docs/MULTIPASS_API_REFERENCE.md](docs/MULTIPASS_API_REFERENCE.md) |
 | Multipass CLI | [Multipass Docs](https://documentation.ubuntu.com/multipass/) |
 | Echo framework | [Echo Docs](https://echo.labstack.com/) |
@@ -421,4 +421,4 @@ Build these reusable components for consistency:
 5. **Security**: No secrets, validate inputs
 6. **Docs**: Update when changing APIs
 
-**Read [PROJECT_PLAN.md](PROJECT_PLAN.md) for full context before starting work.**
+**Read [docs/PROJECT_PLAN.md](docs/PROJECT_PLAN.md) for full context before starting work.**

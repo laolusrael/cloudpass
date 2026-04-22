@@ -19,7 +19,7 @@ CloudPass is an open-source web-based management interface for Canonical's Multi
 | **Backend** | Go + Echo | REST API server |
 | **Frontend** | Svelte + TypeScript | Web UI |
 | **Build** | Vite | Frontend bundling |
-| **Styling** | Plain CSS | UI styling (grayscale) |
+| **Styling** | Tailwind CSS | UI styling (grayscale) |
 | **Terminal** | xterm.js | Web shell access |
 | **Testing** | Go testing + Vitest | Unit tests |
 | **E2E** | Playwright | Integration tests |
