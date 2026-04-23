@@ -118,6 +118,7 @@ func main() {
 
 	e.Use(echoMiddleware.Recover())
 	e.Use(middleware.Logging())
+	e.Use(middleware.RateLimit())
 
 	e.Use(echoMiddleware.CORS())
 

@@ -166,8 +166,13 @@
 
 	async function handleUpdateResources(request: UpdateResourcesRequest) {
 		if (!instance) return;
-		await api.updateInstanceResources(instance.name, request);
-		await loadInstance();
+		try {
+			await api.updateInstanceResources(instance.name, request);
+			await loadInstance();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to update resources';
+			throw e;
+		}
 	}
 
 	const isRunning = $derived(instance?.state === 'Running');

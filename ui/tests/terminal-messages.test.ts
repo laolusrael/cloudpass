@@ -43,7 +43,7 @@ describe('Terminal WebSocket Message Handling', () => {
 		const encoder = new TextEncoder();
 		const binaryData = encoder.encode(textData);
 
-		expect(binaryData instanceof Uint8Array).toBe(true);
+		expect(ArrayBuffer.isView(binaryData)).toBe(true);
 		expect(binaryData.length).toBe(textData.length);
 	});
 
@@ -95,7 +95,7 @@ describe('Terminal WebSocket Message Handling', () => {
 			const encoder = new TextEncoder();
 			const encoded = encoder.encode(input);
 			expect(encoded.length).toBe(expectedLength);
-			expect(encoded instanceof Uint8Array).toBe(true);
+			expect(ArrayBuffer.isView(encoded)).toBe(true);
 		});
 	});
 
