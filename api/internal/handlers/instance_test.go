@@ -74,6 +74,7 @@ func setupInstanceRouter(client multipass.Client) *echo.Echo {
 	e.POST("/instances/:name/start", handler.Start)
 	e.POST("/instances/:name/stop", handler.Stop)
 	e.POST("/instances/:name/restart", handler.Restart)
+	e.PUT("/instances/:name/resources", handler.UpdateResources)
 	return e
 }
 
@@ -592,4 +593,130 @@ func TestUnmount_MissingTargetPath(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "target_path is required")
+}
+
+func TestUpdateResources_Success(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
+
+	e := setupInstanceRouter(mockClient)
+
+	body := `{"cpus": 2, "memory": "2G", "disk": "10G"}`
+	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "updated")
+}
+
+func TestUpdateResources_InstanceNotStopped(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running", CPU: 1, Memory: "1G", Disk: "5G"}})
+
+	e := setupInstanceRouter(mockClient)
+
+	body := `{"cpus": 2}`
+	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "instance_not_stopped")
+}
+
+func TestUpdateResources_CPUExceedsAvailable(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
+
+	e := setupInstanceRouter(mockClient)
+
+	body := `{"cpus": 100}`
+	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "resource_exceeds_host")
+}
+
+func TestUpdateResources_MemoryExceedsAvailable(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
+
+	e := setupInstanceRouter(mockClient)
+
+	body := `{"memory": "100G"}`
+	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "resource_exceeds_host")
+}
+
+func TestUpdateResources_DiskShrinkRejected(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "10G"}})
+
+	e := setupInstanceRouter(mockClient)
+
+	body := `{"disk": "5G"}`
+	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "can only be increased")
+}
+
+func TestUpdateResources_DiskExceedsAvailable(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
+
+	e := setupInstanceRouter(mockClient)
+
+	body := `{"disk": "1000G"}`
+	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "resource_exceeds_host")
+}
+
+func TestUpdateResources_InstanceNotFound(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupInstanceRouter(mockClient)
+
+	body := `{"cpus": 2}`
+	req := httptest.NewRequest(http.MethodPut, "/instances/nonexistent/resources", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestUpdateResources_InvalidMemoryFormat(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
+
+	e := setupInstanceRouter(mockClient)
+
+	body := `{"memory": "invalid"}`
+	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "invalid memory format")
 }

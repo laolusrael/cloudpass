@@ -233,10 +233,12 @@ func (c *multipassClient) GetInstanceResources(name string) (*models.InstanceRes
 	defer cancel()
 
 	resources := &models.InstanceResources{}
+	var lastErr error
 
 	cpusCmd := exec.CommandContext(ctx, "multipass", "get", fmt.Sprintf("local.%s.cpus", name))
 	cpusOutput, err := cpusCmd.Output()
 	if err != nil {
+		lastErr = err
 		logger.Multipass.Debug().Str("name", name).Err(err).Msg("failed to get CPU config")
 	} else {
 		cpus, err := strconv.Atoi(strings.TrimSpace(string(cpusOutput)))
@@ -250,6 +252,7 @@ func (c *multipassClient) GetInstanceResources(name string) (*models.InstanceRes
 	memoryCmd := exec.CommandContext(ctx, "multipass", "get", fmt.Sprintf("local.%s.memory", name))
 	memoryOutput, err := memoryCmd.Output()
 	if err != nil {
+		lastErr = err
 		logger.Multipass.Debug().Str("name", name).Err(err).Msg("failed to get memory config")
 	} else {
 		resources.Memory = strings.TrimSpace(string(memoryOutput))
@@ -258,6 +261,7 @@ func (c *multipassClient) GetInstanceResources(name string) (*models.InstanceRes
 	diskCmd := exec.CommandContext(ctx, "multipass", "get", fmt.Sprintf("local.%s.disk", name))
 	diskOutput, err := diskCmd.Output()
 	if err != nil {
+		lastErr = err
 		logger.Multipass.Debug().Str("name", name).Err(err).Msg("failed to get disk config")
 	} else {
 		resources.Disk = strings.TrimSpace(string(diskOutput))
@@ -270,7 +274,7 @@ func (c *multipassClient) GetInstanceResources(name string) (*models.InstanceRes
 		Str("disk", resources.Disk).
 		Msg("got instance resources config")
 
-	return resources, nil
+	return resources, lastErr
 }
 
 func (c *multipassClient) GetInstanceIP(name string) (string, error) {
@@ -1266,12 +1270,25 @@ func multipassDataDir() string {
 		return snapPath
 	}
 
-	// Non-snap installs use the user's home directory
+	// Non-snap Linux installs use the user's home directory
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		localPath := filepath.Join(homeDir, ".local", "share", "multipass")
 		if _, err := os.Stat(localPath); err == nil {
 			return localPath
+		}
+	}
+
+	// macOS installs
+	if runtime.GOOS == "darwin" && homeDir != "" {
+		macPaths := []string{
+			"/var/root/Library/Application Support/multipassd/",
+			filepath.Join(homeDir, "Library", "Application Support", "multipassd"),
+		}
+		for _, p := range macPaths {
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
 		}
 	}
 

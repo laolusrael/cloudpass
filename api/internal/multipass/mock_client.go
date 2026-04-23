@@ -45,7 +45,7 @@ func (m *MockClient) GetInstance(name string) (*models.Instance, error) {
 			return &inst, nil
 		}
 	}
-	return nil, nil
+	return nil, fmt.Errorf("instance %q not found", name)
 }
 
 func (m *MockClient) GetInstanceResources(name string) (*models.InstanceResources, error) {
