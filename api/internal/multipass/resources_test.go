@@ -1,6 +1,7 @@
 package multipass
 
 import (
+	"os/exec"
 	"testing"
 	"time"
 
@@ -9,7 +10,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func multipassAvailable() bool {
+	_, err := exec.LookPath("multipass")
+	return err == nil
+}
+
 func TestGetInstanceResources_Success(t *testing.T) {
+	if !multipassAvailable() {
+		t.Skip("multipass not available")
+	}
 	client := &multipassClient{timeout: 30 * time.Second}
 
 	resources, err := client.GetInstanceResources("test-vm")
@@ -19,11 +28,14 @@ func TestGetInstanceResources_Success(t *testing.T) {
 }
 
 func TestGetInstanceResources_NotFound(t *testing.T) {
+	if !multipassAvailable() {
+		t.Skip("multipass not available")
+	}
 	client := &multipassClient{timeout: 30 * time.Second}
 
 	resources, err := client.GetInstanceResources("nonexistent-vm")
 
-	assert.NoError(t, err)
+	assert.Error(t, err)
 	assert.NotNil(t, resources)
 }
 
