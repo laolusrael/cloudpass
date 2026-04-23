@@ -1088,7 +1088,7 @@ func (c *multipassClient) GetHostInfo() (*models.HostInfo, error) {
 		}
 		memoryBytes = n
 
-		cmd = exec.Command("powershell", "-Command", "(Get-PSDrive C).Free * 1024")
+		cmd = exec.Command("powershell", "-Command", "(Get-PSDrive C).Free")
 		out, err = cmd.Output()
 		if err != nil {
 			return nil, fmt.Errorf("failed to get disk space: %w", err)
