@@ -402,7 +402,7 @@ multipass get client.primary-name
 Set a configuration setting value.
 
 ```bash
-multipass set [options] <key> <value>
+multipass set [options] <key>=<value>
 ```
 
 **Options:**
@@ -411,8 +411,8 @@ multipass set [options] <key> <value>
 
 **Examples:**
 ```bash
-multipass set local.driver qemu
-multipass set client.primary-name main-vm
+multipass set local.driver=qemu
+multipass set client.primary-name=main-vm
 ```
 
 ---

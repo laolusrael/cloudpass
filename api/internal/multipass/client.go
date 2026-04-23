@@ -888,7 +888,7 @@ func (c *multipassClient) CreateSnapshot(instanceName string, snapshotName strin
 	if comment != "" {
 		setCtx, setCancel := context.WithTimeout(context.Background(), c.timeout)
 		defer setCancel()
-		setCmd := exec.CommandContext(setCtx, "multipass", "set", fmt.Sprintf("local.%s.%s.comment", instanceName, snapshotName), comment)
+		setCmd := exec.CommandContext(setCtx, "multipass", "set", fmt.Sprintf("local.%s.%s.comment=%s", instanceName, snapshotName, comment))
 		_, setErr := setCmd.Output()
 		if setErr != nil {
 			logger.Multipass.Warn().Err(setErr).Str("instance", instanceName).Str("snapshot", snapshotName).Msg("failed to set snapshot comment")
@@ -1239,7 +1239,7 @@ func (c *multipassClient) SetInstanceResources(name string, cpus int, memory str
 
 	if cpus > 0 && cpus != instance.CPU {
 		logger.Multipass.Info().Str("name", name).Int("cpus", cpus).Int("current", instance.CPU).Msg("setting CPU")
-		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.cpus", name), strconv.Itoa(cpus))
+		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.cpus=%d", name, cpus))
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("failed to set CPU to %d: %w (output: %s)", cpus, err, strings.TrimSpace(string(out)))
@@ -1248,7 +1248,7 @@ func (c *multipassClient) SetInstanceResources(name string, cpus int, memory str
 
 	if memory != "" && memory != instance.Memory {
 		logger.Multipass.Info().Str("name", name).Str("memory", memory).Str("current", instance.Memory).Msg("setting memory")
-		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.memory", name), memory)
+		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.memory=%s", name, memory))
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("failed to set memory to %s: %w (output: %s)", memory, err, strings.TrimSpace(string(out)))
@@ -1257,7 +1257,7 @@ func (c *multipassClient) SetInstanceResources(name string, cpus int, memory str
 
 	if disk != "" && disk != instance.Disk {
 		logger.Multipass.Info().Str("name", name).Str("disk", disk).Str("current", instance.Disk).Msg("setting disk")
-		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.disk", name), disk)
+		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.disk=%s", name, disk))
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return fmt.Errorf("failed to set disk to %s: %w (output: %s)", disk, err, strings.TrimSpace(string(out)))
