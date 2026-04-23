@@ -1270,7 +1270,7 @@ func multipassDataDir() string {
 		return snapPath
 	}
 
-	// Non-snap Linux installs use the user's home directory
+	// Non-snap installs use the user's home directory
 	homeDir, err := os.UserHomeDir()
 	if err == nil {
 		localPath := filepath.Join(homeDir, ".local", "share", "multipass")
@@ -1291,7 +1291,6 @@ func multipassDataDir() string {
 			}
 		}
 	}
-
 	// Fallback to root if neither exists
 	return "/"
 }
