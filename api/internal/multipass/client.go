@@ -1122,10 +1122,16 @@ func (c *multipassClient) GetHostInfo() (*models.HostInfo, error) {
 		}
 		memoryBytes = n
 
-		cmd = exec.Command("df", "-bk", "/")
+		dataDir := multipassDataDir()
+		cmd = exec.Command("df", "-B1", dataDir)
 		out, err = cmd.Output()
 		if err != nil {
-			return nil, fmt.Errorf("failed to get disk space: %w", err)
+			// Fallback to root if data directory doesn't exist yet
+			cmd = exec.Command("df", "-B1", "/")
+			out, err = cmd.Output()
+			if err != nil {
+				return nil, fmt.Errorf("failed to get disk space: %w", err)
+			}
 		}
 		lines := strings.Split(string(out), "\n")
 		if len(lines) >= 2 {
@@ -1135,7 +1141,7 @@ func (c *multipassClient) GetHostInfo() (*models.HostInfo, error) {
 				if err != nil {
 					return nil, fmt.Errorf("failed to parse disk space: %w", err)
 				}
-				diskBytes = n * 1024
+				diskBytes = n
 			}
 		}
 
@@ -1251,6 +1257,26 @@ func (c *multipassClient) SetInstanceResources(name string, cpus int, memory str
 
 	logger.Multipass.Info().Str("name", name).Msg("instance resources updated")
 	return nil
+}
+
+func multipassDataDir() string {
+	// Snap installs use this path
+	snapPath := "/var/snap/multipass/common/data/multipassd/vault/instances/"
+	if _, err := os.Stat(snapPath); err == nil {
+		return snapPath
+	}
+
+	// Non-snap installs use the user's home directory
+	homeDir, err := os.UserHomeDir()
+	if err == nil {
+		localPath := filepath.Join(homeDir, ".local", "share", "multipass")
+		if _, err := os.Stat(localPath); err == nil {
+			return localPath
+		}
+	}
+
+	// Fallback to root if neither exists
+	return "/"
 }
 
 func parseCPU(cpuStr string) int {
