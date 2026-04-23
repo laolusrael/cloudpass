@@ -1085,11 +1085,11 @@ func parseMemoryString(s string) (int64, error) {
 		s = s[:len(s)-1]
 	}
 
-	val, err := strconv.ParseInt(s, 10, 64)
+	val, err := strconv.ParseFloat(s, 64)
 	if err != nil {
 		return 0, err
 	}
-	return val * multiplier, nil
+	return int64(val * float64(multiplier)), nil
 }
 
 func parseDiskString(s string) int64 {

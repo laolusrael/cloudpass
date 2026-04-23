@@ -720,3 +720,41 @@ func TestUpdateResources_InvalidMemoryFormat(t *testing.T) {
 	assert.Equal(t, http.StatusBadRequest, rec.Code)
 	assert.Contains(t, rec.Body.String(), "invalid memory format")
 }
+
+func TestUpdateResources_DecimalMemoryFormat(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
+
+	e := setupInstanceRouter(mockClient)
+
+	body := `{"memory": "4.0G"}`
+	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
+
+func TestParseMemoryString(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected int64
+	}{
+		{"1G", 1024 * 1024 * 1024},
+		{"4.0G", 4 * 1024 * 1024 * 1024},
+		{"25.0G", 25 * 1024 * 1024 * 1024},
+		{"512M", 512 * 1024 * 1024},
+		{"2.5G", int64(2.5 * 1024 * 1024 * 1024)},
+		{"1024", 1024},
+		{"", 0},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.input, func(t *testing.T) {
+			result, err := parseMemoryString(tt.input)
+			assert.NoError(t, err)
+			assert.Equal(t, tt.expected, result)
+		})
+	}
+}
