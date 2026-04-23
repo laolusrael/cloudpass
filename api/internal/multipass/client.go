@@ -1237,27 +1237,30 @@ func (c *multipassClient) SetInstanceResources(name string, cpus int, memory str
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	if cpus > 0 {
-		logger.Multipass.Info().Str("name", name).Int("cpus", cpus).Msg("setting CPU")
+	if cpus > 0 && cpus != instance.CPU {
+		logger.Multipass.Info().Str("name", name).Int("cpus", cpus).Int("current", instance.CPU).Msg("setting CPU")
 		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.cpus", name), strconv.Itoa(cpus))
-		if _, err := cmd.Output(); err != nil {
-			return fmt.Errorf("failed to set CPU: %w", err)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to set CPU to %d: %w (output: %s)", cpus, err, strings.TrimSpace(string(out)))
 		}
 	}
 
-	if memory != "" {
-		logger.Multipass.Info().Str("name", name).Str("memory", memory).Msg("setting memory")
+	if memory != "" && memory != instance.Memory {
+		logger.Multipass.Info().Str("name", name).Str("memory", memory).Str("current", instance.Memory).Msg("setting memory")
 		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.memory", name), memory)
-		if _, err := cmd.Output(); err != nil {
-			return fmt.Errorf("failed to set memory: %w", err)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to set memory to %s: %w (output: %s)", memory, err, strings.TrimSpace(string(out)))
 		}
 	}
 
-	if disk != "" {
-		logger.Multipass.Info().Str("name", name).Str("disk", disk).Msg("setting disk")
+	if disk != "" && disk != instance.Disk {
+		logger.Multipass.Info().Str("name", name).Str("disk", disk).Str("current", instance.Disk).Msg("setting disk")
 		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.disk", name), disk)
-		if _, err := cmd.Output(); err != nil {
-			return fmt.Errorf("failed to set disk: %w", err)
+		out, err := cmd.CombinedOutput()
+		if err != nil {
+			return fmt.Errorf("failed to set disk to %s: %w (output: %s)", disk, err, strings.TrimSpace(string(out)))
 		}
 	}
 
