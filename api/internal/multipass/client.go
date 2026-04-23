@@ -174,24 +174,26 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 		return nil, fmt.Errorf("failed to parse instance data: %w", err)
 	}
 
+	memBytes := i.Memory.Total
+	var diskBytes uint64
+	for _, disk := range i.Disks {
+		diskBytes = parseBytes(disk.Total)
+		break // Use first disk
+	}
+
 	instance := &models.Instance{
 		Name:    name,
 		State:   i.State,
 		IPv4:    i.IPv4,
 		IPv6:    i.IPv6,
 		CPU:     parseCPU(i.CPUCount),
-		Memory:  formatBytes(i.Memory.Total),
+		Memory:  formatBytes(memBytes),
+		Disk:    formatBytes(diskBytes),
 		Image:   i.Image,
 		Release: i.Release,
 		Load:    i.Load,
 		Mounts:  make([]models.Mount, 0),
 		Network: make(map[string]models.NetworkInfo),
-	}
-
-	// Calculate disk space from disks map
-	for _, disk := range i.Disks {
-		instance.Disk = formatBytes(parseBytes(disk.Total))
-		break // Use first disk
 	}
 
 	for targetPath, m := range i.Mounts {
@@ -210,16 +212,16 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 
 	// For stopped instances, multipass info may return empty/zero values for resources
 	// Fall back to multipass get to get the configured values
-	if instance.CPU == 0 || instance.Memory == "" || instance.Disk == "" {
+	if instance.CPU == 0 || memBytes == 0 || diskBytes == 0 {
 		resources, err := c.GetInstanceResources(name)
 		if err == nil {
 			if instance.CPU == 0 && resources.CPUs > 0 {
 				instance.CPU = resources.CPUs
 			}
-			if instance.Memory == "" && resources.Memory != "" {
+			if memBytes == 0 && resources.Memory != "" {
 				instance.Memory = resources.Memory
 			}
-			if instance.Disk == "" && resources.Disk != "" {
+			if diskBytes == 0 && resources.Disk != "" {
 				instance.Disk = resources.Disk
 			}
 		}
