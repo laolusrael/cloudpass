@@ -2,11 +2,11 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { api } from '$lib/services/api';
-	import type { Instance } from '$lib/types';
+	import type { Instance } from '$lib/types/instance';
 	import Terminal from '$lib/components/Terminal.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 
-	const name = $derived($page.params.name);
+	const name = $derived($page.params.name || '');
 
 	let instance = $state<Instance | null>(null);
 	let loading = $state(true);

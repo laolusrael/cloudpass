@@ -5,7 +5,7 @@
 	import '@xterm/xterm/css/xterm.css';
 
 	interface Props {
-		instanceName: string;
+		instanceName: string | undefined;
 		wsUrl?: string;
 	}
 
@@ -100,7 +100,7 @@
 		terminal.open(terminalContainer);
 		fitAddon.fit();
 
-		handleResize();
+		// handleResize();
 
 		terminal.onData((data) => {
 			if (ws && ws.readyState === WebSocket.OPEN) {
@@ -114,6 +114,11 @@
 		window.addEventListener('resize', handleResize);
 		const resizeObserver = new ResizeObserver(handleResize);
 		resizeObserver.observe(terminalContainer);
+
+		if (connected) {
+			// resize on initial load to ensure correct dimensions
+			handleResize();
+		}
 	});
 
 	onDestroy(() => {
@@ -166,5 +171,8 @@
 	}
 	:global(.xterm-viewport::-webkit-scrollbar-thumb:hover) {
 		background: #888;
+	}
+	:global(.xterm-screen){
+		min-height: 100%;
 	}
 </style>
