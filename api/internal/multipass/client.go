@@ -47,6 +47,7 @@ type Client interface {
 	ImportInstance(imagePath string, name string, cpus int, memory string, disk string) (*models.Instance, error)
 	GetHostInfo() (*models.HostInfo, error)
 	SetInstanceResources(name string, cpus int, memory string, disk string) error
+	SetTimeout(timeoutSec int)
 }
 
 type multipassClient struct {
@@ -57,6 +58,10 @@ func NewClient(timeoutSec int) Client {
 	return &multipassClient{
 		timeout: time.Duration(timeoutSec) * time.Second,
 	}
+}
+
+func (c *multipassClient) SetTimeout(timeoutSec int) {
+	c.timeout = time.Duration(timeoutSec) * time.Second
 }
 
 func (c *multipassClient) Authenticate(passphrase string) error {

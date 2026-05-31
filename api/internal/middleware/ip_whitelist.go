@@ -4,35 +4,42 @@ import (
 	"net"
 	"net/http"
 
+	"cloudpass/internal/config"
+	"cloudpass/internal/logger"
+	"cloudpass/internal/models"
+
 	"github.com/labstack/echo/v4"
 )
 
-func IPWhitelist(allowedCIDRs []string) echo.MiddlewareFunc {
-	if len(allowedCIDRs) == 0 {
-		return func(next echo.HandlerFunc) echo.HandlerFunc {
-			return next
-		}
-	}
-
-	cidrs := make([]*net.IPNet, 0, len(allowedCIDRs))
-	for _, cidr := range allowedCIDRs {
-		_, ipnet, err := net.ParseCIDR(cidr)
-		if err != nil {
-			continue
-		}
-		cidrs = append(cidrs, ipnet)
-	}
-
+func IPWhitelist(cfgManager *config.ConfigManager) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			allowedCIDRs := cfgManager.GetAllowedIPs()
+
+			cidrs := make([]*net.IPNet, 0, len(allowedCIDRs))
+			for _, cidr := range allowedCIDRs {
+				_, ipnet, err := net.ParseCIDR(cidr)
+				if err != nil {
+					logger.API.Warn().Str("cidr", cidr).Msg("invalid CIDR in allowed_ips config")
+					continue
+				}
+				cidrs = append(cidrs, ipnet)
+			}
+
 			clientIP := c.RealIP()
 			if clientIP == "" {
-				return echo.NewHTTPError(http.StatusForbidden, "access denied: no client IP")
+				return c.JSON(http.StatusForbidden, models.ErrorResponse{
+					Error:   "forbidden",
+					Message: "access denied: no client IP",
+				})
 			}
 
 			ip := net.ParseIP(clientIP)
 			if ip == nil {
-				return echo.NewHTTPError(http.StatusForbidden, "access denied: invalid client IP")
+				return c.JSON(http.StatusForbidden, models.ErrorResponse{
+					Error:   "forbidden",
+					Message: "access denied: invalid client IP",
+				})
 			}
 
 			allowed := false
@@ -44,7 +51,11 @@ func IPWhitelist(allowedCIDRs []string) echo.MiddlewareFunc {
 			}
 
 			if !allowed {
-				return echo.NewHTTPError(http.StatusForbidden, "access denied: IP not whitelisted")
+				logger.API.Warn().Str("ip", clientIP).Msg("access denied: IP not whitelisted")
+				return c.JSON(http.StatusForbidden, models.ErrorResponse{
+					Error:   "forbidden",
+					Message: "access denied: IP not whitelisted",
+				})
 			}
 
 			return next(c)

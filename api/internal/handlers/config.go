@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"net/http"
-	"sync"
+	"strings"
 
 	"cloudpass/internal/config"
 	"cloudpass/internal/logger"
@@ -12,23 +12,15 @@ import (
 )
 
 type ConfigHandler struct {
-	configPath string
-	mu         sync.RWMutex
+	cfgManager *config.ConfigManager
 }
 
-func NewConfigHandler(configPath string) *ConfigHandler {
-	return &ConfigHandler{configPath: configPath}
+func NewConfigHandler(cfgManager *config.ConfigManager) *ConfigHandler {
+	return &ConfigHandler{cfgManager: cfgManager}
 }
 
 func (h *ConfigHandler) Get(c echo.Context) error {
-	cfg, err := config.Load(h.configPath)
-	if err != nil {
-		logger.API.Error().Err(err).Msg("failed to load config")
-		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "internal_error",
-			Message: "failed to load configuration",
-		})
-	}
+	cfg := h.cfgManager.Get()
 
 	return c.JSON(http.StatusOK, models.ConfigResponse{
 		Server: models.ServerConfigResponse{
@@ -62,28 +54,21 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 		})
 	}
 
-	h.mu.Lock()
-	defer h.mu.Unlock()
-
-	cfg, err := config.Load(h.configPath)
-	if err != nil {
-		logger.API.Error().Err(err).Msg("failed to load config for update")
-		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
-			Error:   "internal_error",
-			Message: "failed to load configuration",
-		})
-	}
+	cfg := h.cfgManager.Get()
 
 	modified := false
+	needsRestart := false
 
 	if req.Server != nil {
 		if req.Server.Host != "" {
 			cfg.Server.Host = req.Server.Host
 			modified = true
+			needsRestart = true
 		}
 		if req.Server.Port > 0 {
 			cfg.Server.Port = req.Server.Port
 			modified = true
+			needsRestart = true
 		}
 	}
 
@@ -135,7 +120,7 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 		})
 	}
 
-	if err := config.Save(cfg, h.configPath); err != nil {
+	if err := h.cfgManager.Update(cfg); err != nil {
 		logger.API.Error().Err(err).Msg("failed to save config")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "internal_error",
@@ -143,8 +128,28 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 		})
 	}
 
-	logger.API.Info().Msg("configuration updated")
+	if needsRestart {
+		logger.API.Info().Msg("configuration updated (restart required for server settings)")
+		return c.JSON(http.StatusOK, models.InstanceResponse{
+			Message: "Configuration updated. Server restart required for host/port changes to take effect.",
+		})
+	}
+
+	logger.API.Info().Msg("configuration updated successfully")
+
+	var msg strings.Builder
+	msg.WriteString("Configuration updated successfully.")
+
+	if req.Logging.Level != "" || req.Logging.Format != "" || req.Logging.Output != "" {
+		if err := logger.Reinit(cfg.Logging); err != nil {
+			logger.API.Warn().Err(err).Msg("failed to reinit logger, changes will apply on restart")
+			msg.WriteString(" Logging changes will apply on restart.")
+		} else {
+			msg.WriteString(" Logging changes applied immediately.")
+		}
+	}
+
 	return c.JSON(http.StatusOK, models.InstanceResponse{
-		Message: "Configuration updated. Restart required for changes to take effect.",
+		Message: msg.String(),
 	})
 }

@@ -203,12 +203,15 @@ func EnsureConfig(path string, reset bool) (*Config, error) {
 
 	cfg := defaultConfig
 	cfg.Multipass.SocketPath = DetectSocketPath()
+	cfg.Security.AllowedIPs = DetectLocalNetworks()
 
 	if mpAvailable {
 		fmt.Printf("Detected multipass %s\n", mpVersion)
 	} else {
 		fmt.Println("Multipass not detected")
 	}
+
+	fmt.Printf("Detected local networks: %v\n", cfg.Security.AllowedIPs)
 
 	cfgBytes, err := yaml.Marshal(cfg)
 	if err != nil {
@@ -243,6 +246,12 @@ func Load(path string) (*Config, error) {
 
 	if cfg.Multipass.SocketPath == "" {
 		cfg.Multipass.SocketPath = DetectSocketPath()
+	}
+
+	if len(cfg.Security.AllowedIPs) == 0 {
+		cfg.Security.AllowedIPs = DetectLocalNetworks()
+		fmt.Printf("Warning: allowed_ips is empty, auto-detected local networks: %v\n", cfg.Security.AllowedIPs)
+		fmt.Println("You can review and modify this in Settings.")
 	}
 
 	if cfg.Multipass.PassphraseEnv != "" {

@@ -15,8 +15,8 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func testConfig() *config.Config {
-	return &config.Config{
+func testConfig() *config.ConfigManager {
+	return config.NewConfigManager(&config.Config{
 		Server: config.ServerConfig{Host: "0.0.0.0", Port: 8080},
 		Multipass: config.MultipassConfig{
 			DefaultTimeoutSec: 300,
@@ -25,7 +25,7 @@ func testConfig() *config.Config {
 			MaxFileSizeMB: 100,
 			DefaultPath:   "/home/ubuntu",
 		},
-	}
+	}, "")
 }
 
 func TestValidateInstanceName(t *testing.T) {

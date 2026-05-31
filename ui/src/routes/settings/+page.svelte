@@ -58,7 +58,7 @@
 				.map((ip) => ip.trim())
 				.filter((ip) => ip !== '');
 
-			await api.updateConfig({
+			const response = await api.updateConfig({
 				server: {
 					host: serverHost,
 					port: serverPort
@@ -78,7 +78,12 @@
 					output: logOutput
 				}
 			});
-			notifications.success('Configuration saved. Restart required for changes to take effect.');
+
+			if (response.message.includes('restart')) {
+				notifications.warning(response.message);
+			} else {
+				notifications.success(response.message);
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to save config';
 		} finally {
@@ -161,7 +166,9 @@
 							class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
 							placeholder="192.168.1.0/24, 10.0.0.0/8"
 						/>
-						<p class="mt-1 text-xs text-gray-500">Leave empty to allow all IPs</p>
+						<p class="mt-1 text-xs text-gray-500">
+							Comma-separated CIDR ranges. Leave empty to auto-detect local networks.
+						</p>
 					</div>
 					<div>
 						<label for="ws-timeout" class="block text-sm font-medium text-gray-700 mb-1">

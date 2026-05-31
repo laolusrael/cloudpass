@@ -19,12 +19,12 @@ import (
 )
 
 type InstanceHandler struct {
-	client multipass.Client
-	cfg    *config.Config
+	client     multipass.Client
+	cfgManager *config.ConfigManager
 }
 
-func NewInstanceHandler(client multipass.Client, cfg *config.Config) *InstanceHandler {
-	return &InstanceHandler{client: client, cfg: cfg}
+func NewInstanceHandler(client multipass.Client, cfgManager *config.ConfigManager) *InstanceHandler {
+	return &InstanceHandler{client: client, cfgManager: cfgManager}
 }
 
 var instanceNameRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
@@ -850,12 +850,13 @@ func (h *InstanceHandler) Upload(c echo.Context) error {
 	}
 	defer src.Close()
 
-	maxSize := int64(h.cfg.Upload.MaxFileSizeMB) * 1024 * 1024
+	uploadCfg := h.cfgManager.GetUploadConfig()
+	maxSize := int64(uploadCfg.MaxFileSizeMB) * 1024 * 1024
 	if file.Size > maxSize {
 		logger.API.Warn().Str("ip", c.RealIP()).Int64("size", file.Size).Int64("max", maxSize).Msg("file too large")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "file_too_large",
-			Message: fmt.Sprintf("file size exceeds maximum of %d MB", h.cfg.Upload.MaxFileSizeMB),
+			Message: fmt.Sprintf("file size exceeds maximum of %d MB", uploadCfg.MaxFileSizeMB),
 		})
 	}
 
@@ -883,7 +884,7 @@ func (h *InstanceHandler) Upload(c echo.Context) error {
 
 	targetPath := c.FormValue("target_path")
 	if targetPath == "" {
-		targetPath = filepath.Join(h.cfg.Upload.DefaultPath, file.Filename)
+		targetPath = filepath.Join(uploadCfg.DefaultPath, file.Filename)
 	}
 
 	if err := validatePathTraversal(targetPath); err != nil {

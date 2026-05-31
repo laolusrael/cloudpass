@@ -11,12 +11,12 @@ import (
 )
 
 type HostHandler struct {
-	client multipass.Client
-	cfg    *config.Config
+	client     multipass.Client
+	cfgManager *config.ConfigManager
 }
 
-func NewHostHandler(client multipass.Client, cfg *config.Config) *HostHandler {
-	return &HostHandler{client: client, cfg: cfg}
+func NewHostHandler(client multipass.Client, cfgManager *config.ConfigManager) *HostHandler {
+	return &HostHandler{client: client, cfgManager: cfgManager}
 }
 
 func (h *HostHandler) GetInfo(c echo.Context) error {

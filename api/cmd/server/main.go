@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -70,14 +71,16 @@ func main() {
 		os.Exit(1)
 	}
 
-	if err := logger.Init(cfg.Logging); err != nil {
+	cfgManager := config.NewConfigManager(cfg, configPath)
+
+	if err := logger.Init(cfgManager.GetLoggingConfig()); err != nil {
 		fmt.Fprintf(os.Stderr, "failed to initialize logger: %v\n", err)
 		os.Exit(1)
 	}
 
 	log.Info().Msg("starting cloudpass API server")
 
-	mpClient := multipass.NewClient(cfg.Multipass.DefaultTimeoutSec)
+	mpClient := multipass.NewClient(cfgManager.GetMultipassTimeout())
 
 	if cfg.Multipass.Passphrase != "" {
 		if err := mpClient.Authenticate(cfg.Multipass.Passphrase); err != nil {
@@ -94,14 +97,14 @@ func main() {
 
 	eventHub := handlers.NewEventHub()
 
-	instanceHandler := handlers.NewInstanceHandler(mpClient, cfg)
+	instanceHandler := handlers.NewInstanceHandler(mpClient, cfgManager)
 	imageHandler := handlers.NewImageHandler(mpClient)
 	networkHandler := handlers.NewNetworkHandler(mpClient)
 	healthHandler := handlers.NewHealthHandler()
-	configHandler := handlers.NewConfigHandler(configPath)
-	terminalHandler := websocket.NewTerminalHandler(mpClient, cfg.Multipass.SSHKeyPath)
-	jobHandler := handlers.NewJobHandler(mpClient, cfg.Multipass.DefaultTimeoutSec, jobStorage, eventHub)
-	hostHandler := handlers.NewHostHandler(mpClient, cfg)
+	configHandler := handlers.NewConfigHandler(cfgManager)
+	terminalHandler := websocket.NewTerminalHandler(mpClient, cfgManager.GetSSHKeyPath())
+	jobHandler := handlers.NewJobHandler(mpClient, cfgManager.GetMultipassTimeout(), jobStorage, eventHub)
+	hostHandler := handlers.NewHostHandler(mpClient, cfgManager)
 
 	jobStorage.Cleanup(24 * time.Hour)
 
@@ -122,11 +125,10 @@ func main() {
 
 	e.Use(echoMiddleware.CORS())
 
-	e.GET("/api/health", healthHandler.Health)
-
 	api := e.Group("/api")
-	api.Use(middleware.IPWhitelist(cfg.Security.AllowedIPs))
+	api.Use(middleware.IPWhitelist(cfgManager))
 
+	api.GET("/health", healthHandler.Health)
 	api.GET("/instances", instanceHandler.List)
 	api.POST("/instances", instanceHandler.Create)
 	api.POST("/instances/async", jobHandler.CreateInstanceAsync)
@@ -170,7 +172,7 @@ func main() {
 		WriteTimeout: 30 * time.Second,
 	}
 
-	printBanner(cfg.Server.Host, cfg.Server.Port)
+	printBanner(cfg.Server.Host, cfg.Server.Port, cfgManager.GetAllowedIPs())
 
 	checkSSHKeySetup(cfg.Multipass.SSHKeyPath)
 
@@ -197,7 +199,7 @@ func main() {
 	log.Info().Msg("server exited")
 }
 
-func printBanner(host string, port int) {
+func printBanner(host string, port int, allowedIPs []string) {
 	fmt.Println("")
 	fmt.Println("CloudPass is running!")
 	fmt.Println("")
@@ -210,7 +212,7 @@ func printBanner(host string, port int) {
 
 		if localIP := getLocalIP(); localIP != "" {
 			urls = append(urls, fmt.Sprintf("  Web UI:  http://%s:%d", localIP, port))
-			urls = append(urls, fmt.Sprintf("  API:      http://%s:%d/api", localIP, port))
+			urls = append(urls, fmt.Sprintf("  API:     http://%s:%d/api", localIP, port))
 		}
 	} else {
 		urls = append(urls, fmt.Sprintf("  Web UI:  http://%s:%d", host, port))
@@ -221,6 +223,8 @@ func printBanner(host string, port int) {
 		fmt.Println(u)
 	}
 
+	fmt.Println("")
+	fmt.Printf("Allowed networks: %s\n", strings.Join(allowedIPs, ", "))
 	fmt.Println("")
 	fmt.Println("Press Ctrl+C to stop")
 	fmt.Println("")
