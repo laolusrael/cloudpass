@@ -5,30 +5,123 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sync"
+	"sync/atomic"
 	"time"
 
 	"cloudpass/internal/config"
+
 	"github.com/rs/zerolog"
 )
 
+type atomicLogger struct {
+	ptr atomic.Pointer[zerolog.Logger]
+}
+
+func (a *atomicLogger) Load() *zerolog.Logger {
+	return a.ptr.Load()
+}
+
+func (a *atomicLogger) Store(l *zerolog.Logger) {
+	a.ptr.Store(l)
+}
+
 var (
-	API       zerolog.Logger
-	Multipass zerolog.Logger
-	Websocket zerolog.Logger
+	API       atomicLogger
+	Multipass atomicLogger
+	Websocket atomicLogger
+	logMu     sync.Mutex
 )
 
+func init() {
+	noop := zerolog.Nop()
+	API.Store(&noop)
+	Multipass.Store(&noop)
+	Websocket.Store(&noop)
+}
+
 func Init(cfg config.LoggingConfig) error {
+	logMu.Lock()
+	defer logMu.Unlock()
+
+	w, err := createWriter(cfg)
+	if err != nil {
+		return err
+	}
+
+	zerolog.TimeFieldFormat = time.RFC3339
+	zerolog.SetGlobalLevel(parseLevel(cfg.Level))
+
+	baseLogger := zerolog.New(w)
+
+	api := baseLogger.With().Str("component", "api").Logger()
+	mp := baseLogger.With().Str("component", "multipass").Logger()
+	ws := baseLogger.With().Str("component", "websocket").Logger()
+
+	if cfg.Levels.API != "" {
+		api = api.Level(parseLevel(cfg.Levels.API))
+	}
+	if cfg.Levels.Multipass != "" {
+		mp = mp.Level(parseLevel(cfg.Levels.Multipass))
+	}
+	if cfg.Levels.Websocket != "" {
+		ws = ws.Level(parseLevel(cfg.Levels.Websocket))
+	}
+
+	API.Store(&api)
+	Multipass.Store(&mp)
+	Websocket.Store(&ws)
+
+	return nil
+}
+
+// Reinit reinitializes the logger with new configuration at runtime.
+func Reinit(cfg config.LoggingConfig) error {
+	logMu.Lock()
+	defer logMu.Unlock()
+
+	w, err := createWriter(cfg)
+	if err != nil {
+		return err
+	}
+
+	zerolog.SetGlobalLevel(parseLevel(cfg.Level))
+
+	baseLogger := zerolog.New(w)
+
+	api := baseLogger.With().Str("component", "api").Logger()
+	mp := baseLogger.With().Str("component", "multipass").Logger()
+	ws := baseLogger.With().Str("component", "websocket").Logger()
+
+	if cfg.Levels.API != "" {
+		api = api.Level(parseLevel(cfg.Levels.API))
+	}
+	if cfg.Levels.Multipass != "" {
+		mp = mp.Level(parseLevel(cfg.Levels.Multipass))
+	}
+	if cfg.Levels.Websocket != "" {
+		ws = ws.Level(parseLevel(cfg.Levels.Websocket))
+	}
+
+	API.Store(&api)
+	Multipass.Store(&mp)
+	Websocket.Store(&ws)
+
+	return nil
+}
+
+func createWriter(cfg config.LoggingConfig) (io.Writer, error) {
 	var output io.Writer
 
 	switch cfg.Output {
 	case "file":
 		dir := filepath.Dir(cfg.File.Path)
 		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create log directory: %w", err)
+			return nil, fmt.Errorf("failed to create log directory: %w", err)
 		}
 		f, err := os.OpenFile(cfg.File.Path, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
 		if err != nil {
-			return fmt.Errorf("failed to open log file: %w", err)
+			return nil, fmt.Errorf("failed to open log file: %w", err)
 		}
 		output = &rotatingWriter{
 			file:       f,
@@ -47,26 +140,7 @@ func Init(cfg config.LoggingConfig) error {
 		output = zerolog.ConsoleWriter{Out: output, TimeFormat: time.RFC3339}
 	}
 
-	zerolog.TimeFieldFormat = time.RFC3339
-	zerolog.SetGlobalLevel(parseLevel(cfg.Level))
-
-	baseLogger := zerolog.New(output)
-
-	API = baseLogger.With().Str("component", "api").Logger()
-	Multipass = baseLogger.With().Str("component", "multipass").Logger()
-	Websocket = baseLogger.With().Str("component", "websocket").Logger()
-
-	if cfg.Levels.API != "" {
-		API = API.Level(parseLevel(cfg.Levels.API))
-	}
-	if cfg.Levels.Multipass != "" {
-		Multipass = Multipass.Level(parseLevel(cfg.Levels.Multipass))
-	}
-	if cfg.Levels.Websocket != "" {
-		Websocket = Websocket.Level(parseLevel(cfg.Levels.Websocket))
-	}
-
-	return nil
+	return output, nil
 }
 
 type rotatingWriter struct {

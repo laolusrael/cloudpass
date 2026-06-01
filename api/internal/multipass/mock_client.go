@@ -280,3 +280,5 @@ func (m *MockClient) SetInstanceResources(name string, cpus int, memory string, 
 	}
 	return fmt.Errorf("instance %q not found", name)
 }
+
+func (m *MockClient) SetTimeout(_ int) {}

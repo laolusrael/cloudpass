@@ -47,6 +47,7 @@ type Client interface {
 	ImportInstance(imagePath string, name string, cpus int, memory string, disk string) (*models.Instance, error)
 	GetHostInfo() (*models.HostInfo, error)
 	SetInstanceResources(name string, cpus int, memory string, disk string) error
+	SetTimeout(timeoutSec int)
 }
 
 type multipassClient struct {
@@ -59,6 +60,10 @@ func NewClient(timeoutSec int) Client {
 	}
 }
 
+func (c *multipassClient) SetTimeout(timeoutSec int) {
+	c.timeout = time.Duration(timeoutSec) * time.Second
+}
+
 func (c *multipassClient) Authenticate(passphrase string) error {
 	if passphrase == "" {
 		return nil
@@ -67,16 +72,16 @@ func (c *multipassClient) Authenticate(passphrase string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Debug().Msg("authenticating with multipass")
+	logger.Multipass.Load().Debug().Msg("authenticating with multipass")
 	cmd := exec.CommandContext(ctx, "multipass", "authenticate")
 	cmd.Stdin = strings.NewReader(passphrase)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Msg("multipass authentication failed")
+		logger.Multipass.Load().Error().Err(err).Msg("multipass authentication failed")
 		return fmt.Errorf("authentication failed: %w", err)
 	}
 
-	logger.Multipass.Info().Msg("multipass authenticated successfully")
+	logger.Multipass.Load().Info().Msg("multipass authenticated successfully")
 	return nil
 }
 
@@ -84,11 +89,11 @@ func (c *multipassClient) ListInstances() ([]models.Instance, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Debug().Msg("executing: multipass list")
+	logger.Multipass.Load().Debug().Msg("executing: multipass list")
 	cmd := exec.CommandContext(ctx, "multipass", "list", "--format", "json")
 	output, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Msg("failed to list instances")
+		logger.Multipass.Load().Error().Err(err).Msg("failed to list instances")
 		return nil, fmt.Errorf("failed to list instances: %w", err)
 	}
 
@@ -118,15 +123,15 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Debug().Str("name", name).Msg("executing: multipass info")
+	logger.Multipass.Load().Debug().Str("name", name).Msg("executing: multipass info")
 	cmd := exec.CommandContext(ctx, "multipass", "info", name, "--format", "json")
 	output, err := cmd.Output()
 	if err != nil {
 		if strings.Contains(err.Error(), "does not exist") {
-			logger.Multipass.Warn().Str("name", name).Msg("instance not found")
+			logger.Multipass.Load().Warn().Str("name", name).Msg("instance not found")
 			return nil, fmt.Errorf("instance %q not found", name)
 		}
-		logger.Multipass.Error().Err(err).Str("name", name).Msg("failed to get instance info")
+		logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to get instance info")
 		return nil, fmt.Errorf("failed to get instance info: %w", err)
 	}
 
@@ -241,11 +246,11 @@ func (c *multipassClient) GetInstanceResources(name string) (*models.InstanceRes
 	cpusOutput, err := cpusCmd.Output()
 	if err != nil {
 		lastErr = err
-		logger.Multipass.Debug().Str("name", name).Err(err).Msg("failed to get CPU config")
+		logger.Multipass.Load().Debug().Str("name", name).Err(err).Msg("failed to get CPU config")
 	} else {
 		cpus, err := strconv.Atoi(strings.TrimSpace(string(cpusOutput)))
 		if err != nil {
-			logger.Multipass.Warn().Str("name", name).Err(err).Msg("failed to parse CPU config")
+			logger.Multipass.Load().Warn().Str("name", name).Err(err).Msg("failed to parse CPU config")
 		} else {
 			resources.CPUs = cpus
 		}
@@ -255,7 +260,7 @@ func (c *multipassClient) GetInstanceResources(name string) (*models.InstanceRes
 	memoryOutput, err := memoryCmd.Output()
 	if err != nil {
 		lastErr = err
-		logger.Multipass.Debug().Str("name", name).Err(err).Msg("failed to get memory config")
+		logger.Multipass.Load().Debug().Str("name", name).Err(err).Msg("failed to get memory config")
 	} else {
 		resources.Memory = strings.TrimSpace(string(memoryOutput))
 	}
@@ -264,12 +269,12 @@ func (c *multipassClient) GetInstanceResources(name string) (*models.InstanceRes
 	diskOutput, err := diskCmd.Output()
 	if err != nil {
 		lastErr = err
-		logger.Multipass.Debug().Str("name", name).Err(err).Msg("failed to get disk config")
+		logger.Multipass.Load().Debug().Str("name", name).Err(err).Msg("failed to get disk config")
 	} else {
 		resources.Disk = strings.TrimSpace(string(diskOutput))
 	}
 
-	logger.Multipass.Debug().
+	logger.Multipass.Load().Debug().
 		Str("name", name).
 		Int("cpus", resources.CPUs).
 		Str("memory", resources.Memory).
@@ -324,43 +329,43 @@ func (c *multipassClient) CreateInstance(opts models.CreateInstanceRequest) (*mo
 	}
 
 	if opts.Image != "" {
-		logger.Multipass.Info().Str("image", opts.Image).Msg("starting instance creation with image")
+		logger.Multipass.Load().Info().Str("image", opts.Image).Msg("starting instance creation with image")
 	} else {
-		logger.Multipass.Info().Msg("starting instance creation with default image")
+		logger.Multipass.Load().Info().Msg("starting instance creation with default image")
 	}
 
 	cmd := exec.CommandContext(ctx, "multipass", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("name", opts.Name).Msg("failed to create instance")
+		logger.Multipass.Load().Error().Err(err).Str("name", opts.Name).Msg("failed to create instance")
 		return nil, fmt.Errorf("failed to create instance: %w", err)
 	}
 
-	logger.Multipass.Info().Str("name", opts.Name).Msg("instance creation command completed, fetching instance info")
+	logger.Multipass.Load().Info().Str("name", opts.Name).Msg("instance creation command completed, fetching instance info")
 
 	outputStr := string(output)
 	if strings.Contains(outputStr, "Launched:") {
 		parts := strings.Split(outputStr, ":")
 		if len(parts) >= 2 {
 			name := strings.TrimSpace(parts[1])
-			logger.Multipass.Info().Str("name", name).Msg("instance launched, retrieving details")
+			logger.Multipass.Load().Info().Str("name", name).Msg("instance launched, retrieving details")
 			instance, err := c.GetInstance(name)
 			if err != nil {
-				logger.Multipass.Error().Err(err).Str("name", name).Msg("failed to get instance details after launch")
+				logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to get instance details after launch")
 				return nil, fmt.Errorf("failed to get instance: %w", err)
 			}
-			logger.Multipass.Info().Str("name", instance.Name).Str("state", instance.State).Msg("instance ready")
+			logger.Multipass.Load().Info().Str("name", instance.Name).Str("state", instance.State).Msg("instance ready")
 			return instance, nil
 		}
 	}
 
-	logger.Multipass.Info().Str("name", opts.Name).Msg("retrieving instance info")
+	logger.Multipass.Load().Info().Str("name", opts.Name).Msg("retrieving instance info")
 	instance, err := c.GetInstance(opts.Name)
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("name", opts.Name).Msg("failed to get instance info")
+		logger.Multipass.Load().Error().Err(err).Str("name", opts.Name).Msg("failed to get instance info")
 		return nil, fmt.Errorf("failed to get instance: %w", err)
 	}
-	logger.Multipass.Info().Str("name", instance.Name).Str("state", instance.State).Msg("instance ready")
+	logger.Multipass.Load().Info().Str("name", instance.Name).Str("state", instance.State).Msg("instance ready")
 	return instance, nil
 }
 
@@ -393,18 +398,18 @@ func (c *multipassClient) LaunchInstanceBackground(opts models.CreateInstanceReq
 	}
 
 	if opts.Image != "" {
-		logger.Multipass.Info().Str("image", opts.Image).Str("name", opts.Name).Msg("starting instance creation in background")
+		logger.Multipass.Load().Info().Str("image", opts.Image).Str("name", opts.Name).Msg("starting instance creation in background")
 	} else {
-		logger.Multipass.Info().Str("name", opts.Name).Msg("starting instance creation in background with default image")
+		logger.Multipass.Load().Info().Str("name", opts.Name).Msg("starting instance creation in background with default image")
 	}
 
 	cmd := exec.Command("multipass", args...)
 	if err := cmd.Start(); err != nil {
-		logger.Multipass.Error().Err(err).Str("name", opts.Name).Msg("failed to start multipass launch")
+		logger.Multipass.Load().Error().Err(err).Str("name", opts.Name).Msg("failed to start multipass launch")
 		return fmt.Errorf("failed to start instance creation: %w", err)
 	}
 
-	logger.Multipass.Info().Str("name", opts.Name).Msg("instance launch started in background")
+	logger.Multipass.Load().Info().Str("name", opts.Name).Msg("instance launch started in background")
 	return nil
 }
 
@@ -414,35 +419,35 @@ func (c *multipassClient) WaitForInstance(name string, timeout time.Duration) (*
 
 	timeoutChan := time.After(timeout)
 
-	logger.Multipass.Info().Str("name", name).Msg("waiting for instance to be created")
+	logger.Multipass.Load().Info().Str("name", name).Msg("waiting for instance to be created")
 
 	for {
 		select {
 		case <-timeoutChan:
-			logger.Multipass.Error().Str("name", name).Msg("instance creation timed out")
+			logger.Multipass.Load().Error().Str("name", name).Msg("instance creation timed out")
 			return nil, fmt.Errorf("instance creation timed out after %v", timeout)
 		case <-ticker.C:
 			instances, err := c.ListInstances()
 			if err != nil {
-				logger.Multipass.Warn().Err(err).Str("name", name).Msg("failed to list instances, retrying")
+				logger.Multipass.Load().Warn().Err(err).Str("name", name).Msg("failed to list instances, retrying")
 				continue
 			}
 
 			for _, inst := range instances {
 				if inst.Name == name {
-					logger.Multipass.Info().Str("name", name).Str("state", inst.State).Msg("instance found")
+					logger.Multipass.Load().Info().Str("name", name).Str("state", inst.State).Msg("instance found")
 
 					instance, err := c.GetInstance(name)
 					if err != nil {
 						return nil, fmt.Errorf("failed to get instance details: %w", err)
 					}
 
-					logger.Multipass.Info().Str("name", name).Str("state", instance.State).Msg("instance ready")
+					logger.Multipass.Load().Info().Str("name", name).Str("state", instance.State).Msg("instance ready")
 					return instance, nil
 				}
 			}
 
-			logger.Multipass.Debug().Str("name", name).Msg("instance not yet created, waiting...")
+			logger.Multipass.Load().Debug().Str("name", name).Msg("instance not yet created, waiting...")
 		}
 	}
 }
@@ -451,15 +456,15 @@ func (c *multipassClient) StartInstance(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Debug().Str("name", name).Msg("starting instance")
+	logger.Multipass.Load().Debug().Str("name", name).Msg("starting instance")
 	cmd := exec.CommandContext(ctx, "multipass", "start", name)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("name", name).Msg("failed to start instance")
+		logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to start instance")
 		return fmt.Errorf("failed to start instance: %w", err)
 	}
 
-	logger.Multipass.Info().Str("name", name).Msg("instance started")
+	logger.Multipass.Load().Info().Str("name", name).Msg("instance started")
 	return nil
 }
 
@@ -467,15 +472,15 @@ func (c *multipassClient) StopInstance(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Debug().Str("name", name).Msg("stopping instance")
+	logger.Multipass.Load().Debug().Str("name", name).Msg("stopping instance")
 	cmd := exec.CommandContext(ctx, "multipass", "stop", name)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("name", name).Msg("failed to stop instance")
+		logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to stop instance")
 		return fmt.Errorf("failed to stop instance: %w", err)
 	}
 
-	logger.Multipass.Info().Str("name", name).Msg("instance stopped")
+	logger.Multipass.Load().Info().Str("name", name).Msg("instance stopped")
 	return nil
 }
 
@@ -483,15 +488,15 @@ func (c *multipassClient) RestartInstance(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Debug().Str("name", name).Msg("restarting instance")
+	logger.Multipass.Load().Debug().Str("name", name).Msg("restarting instance")
 	cmd := exec.CommandContext(ctx, "multipass", "restart", name)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("name", name).Msg("failed to restart instance")
+		logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to restart instance")
 		return fmt.Errorf("failed to restart instance: %w", err)
 	}
 
-	logger.Multipass.Info().Str("name", name).Msg("instance restarted")
+	logger.Multipass.Load().Info().Str("name", name).Msg("instance restarted")
 	return nil
 }
 
@@ -499,15 +504,15 @@ func (c *multipassClient) DeleteInstance(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Info().Str("name", name).Msg("deleting instance")
+	logger.Multipass.Load().Info().Str("name", name).Msg("deleting instance")
 	cmd := exec.CommandContext(ctx, "multipass", "delete", name)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("name", name).Msg("failed to delete instance")
+		logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to delete instance")
 		return fmt.Errorf("failed to delete instance: %w", err)
 	}
 
-	logger.Multipass.Info().Str("name", name).Msg("instance deleted")
+	logger.Multipass.Load().Info().Str("name", name).Msg("instance deleted")
 	return nil
 }
 
@@ -515,15 +520,15 @@ func (c *multipassClient) SuspendInstance(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Debug().Str("name", name).Msg("suspending instance")
+	logger.Multipass.Load().Debug().Str("name", name).Msg("suspending instance")
 	cmd := exec.CommandContext(ctx, "multipass", "suspend", name)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("name", name).Msg("failed to suspend instance")
+		logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to suspend instance")
 		return fmt.Errorf("failed to suspend instance: %w", err)
 	}
 
-	logger.Multipass.Info().Str("name", name).Msg("instance suspended")
+	logger.Multipass.Load().Info().Str("name", name).Msg("instance suspended")
 	return nil
 }
 
@@ -531,15 +536,15 @@ func (c *multipassClient) ResumeInstance(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Debug().Str("name", name).Msg("resuming instance")
+	logger.Multipass.Load().Debug().Str("name", name).Msg("resuming instance")
 	cmd := exec.CommandContext(ctx, "multipass", "start", name)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("name", name).Msg("failed to resume instance")
+		logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to resume instance")
 		return fmt.Errorf("failed to resume instance: %w", err)
 	}
 
-	logger.Multipass.Info().Str("name", name).Msg("instance resumed")
+	logger.Multipass.Load().Info().Str("name", name).Msg("instance resumed")
 	return nil
 }
 
@@ -556,15 +561,15 @@ func (c *multipassClient) CreateNetwork(name string, mode string, mac string) er
 	}
 	args = append(args, name)
 
-	logger.Multipass.Info().Str("name", name).Str("mode", mode).Msg("creating network")
+	logger.Multipass.Load().Info().Str("name", name).Str("mode", mode).Msg("creating network")
 	cmd := exec.CommandContext(ctx, "multipass", args...)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("name", name).Msg("failed to create network")
+		logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to create network")
 		return fmt.Errorf("failed to create network: %w", err)
 	}
 
-	logger.Multipass.Info().Str("name", name).Msg("network created")
+	logger.Multipass.Load().Info().Str("name", name).Msg("network created")
 	return nil
 }
 
@@ -572,15 +577,15 @@ func (c *multipassClient) DeleteNetwork(name string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Info().Str("name", name).Msg("deleting network")
+	logger.Multipass.Load().Info().Str("name", name).Msg("deleting network")
 	cmd := exec.CommandContext(ctx, "multipass", "networks", "delete", name)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("name", name).Msg("failed to delete network")
+		logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to delete network")
 		return fmt.Errorf("failed to delete network: %w", err)
 	}
 
-	logger.Multipass.Info().Str("name", name).Msg("network deleted")
+	logger.Multipass.Load().Info().Str("name", name).Msg("network deleted")
 	return nil
 }
 
@@ -588,11 +593,11 @@ func (c *multipassClient) ListImages() ([]models.Image, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Debug().Msg("listing images")
+	logger.Multipass.Load().Debug().Msg("listing images")
 	cmd := exec.CommandContext(ctx, "multipass", "find", "--format", "json")
 	output, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Msg("failed to list images")
+		logger.Multipass.Load().Error().Err(err).Msg("failed to list images")
 		return nil, fmt.Errorf("failed to list images: %w", err)
 	}
 
@@ -600,7 +605,7 @@ func (c *multipassClient) ListImages() ([]models.Image, error) {
 		Images map[string]json.RawMessage `json:"images"`
 	}
 	if err := json.Unmarshal(output, &raw); err != nil {
-		logger.Multipass.Error().Err(err).Msg("failed to parse images")
+		logger.Multipass.Load().Error().Err(err).Msg("failed to parse images")
 		return nil, fmt.Errorf("failed to parse images: %w", err)
 	}
 
@@ -608,14 +613,14 @@ func (c *multipassClient) ListImages() ([]models.Image, error) {
 	for alias, data := range raw.Images {
 		var img models.Image
 		if err := json.Unmarshal(data, &img); err != nil {
-			logger.Multipass.Warn().Str("alias", alias).Err(err).Msg("failed to parse image data")
+			logger.Multipass.Load().Warn().Str("alias", alias).Err(err).Msg("failed to parse image data")
 			continue
 		}
 		img.Alias = alias
 		images = append(images, img)
 	}
 
-	logger.Multipass.Debug().Int("count", len(images)).Msg("listed images")
+	logger.Multipass.Load().Debug().Int("count", len(images)).Msg("listed images")
 	return images, nil
 }
 
@@ -623,11 +628,11 @@ func (c *multipassClient) ListNetworks() ([]models.Network, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Debug().Msg("listing networks")
+	logger.Multipass.Load().Debug().Msg("listing networks")
 	cmd := exec.CommandContext(ctx, "multipass", "networks", "--format", "json")
 	output, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Msg("failed to list networks")
+		logger.Multipass.Load().Error().Err(err).Msg("failed to list networks")
 		return nil, fmt.Errorf("failed to list networks: %w", err)
 	}
 
@@ -635,11 +640,11 @@ func (c *multipassClient) ListNetworks() ([]models.Network, error) {
 		Networks []models.Network `json:"list"`
 	}
 	if err := json.Unmarshal(output, &result); err != nil {
-		logger.Multipass.Error().Err(err).Msg("failed to parse networks")
+		logger.Multipass.Load().Error().Err(err).Msg("failed to parse networks")
 		return nil, fmt.Errorf("failed to parse networks: %w", err)
 	}
 
-	logger.Multipass.Debug().Int("count", len(result.Networks)).Msg("listed networks")
+	logger.Multipass.Load().Debug().Int("count", len(result.Networks)).Msg("listed networks")
 	return result.Networks, nil
 }
 
@@ -675,7 +680,7 @@ func (c *multipassClient) MountInstance(instanceName string, sourcePath string, 
 		args = []string{"mount", sourcePath, instanceName + ":" + targetPath}
 	}
 
-	logger.Multipass.Info().
+	logger.Multipass.Load().Info().
 		Str("instance", instanceName).
 		Str("source", sourcePath).
 		Str("target", targetPath).
@@ -687,21 +692,21 @@ func (c *multipassClient) MountInstance(instanceName string, sourcePath string, 
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderrOut = string(exitErr.Stderr)
-			logger.Multipass.Error().
+			logger.Multipass.Load().Error().
 				Err(err).
 				Str("instance", instanceName).
 				Str("stderr", stderrOut).
 				Msg("failed to mount directory")
 			return fmt.Errorf("failed to mount directory: %s", stderrOut)
 		}
-		logger.Multipass.Error().
+		logger.Multipass.Load().Error().
 			Err(err).
 			Str("instance", instanceName).
 			Msg("failed to mount directory")
 		return fmt.Errorf("failed to mount directory: %w", err)
 	}
 
-	logger.Multipass.Info().
+	logger.Multipass.Load().Info().
 		Str("instance", instanceName).
 		Str("target", targetPath).
 		Msg("directory mounted")
@@ -730,7 +735,7 @@ func (c *multipassClient) UnmountInstance(instanceName string, targetPath string
 
 	args := []string{"umount", instanceName + ":" + targetPath}
 
-	logger.Multipass.Info().
+	logger.Multipass.Load().Info().
 		Str("instance", instanceName).
 		Str("target", targetPath).
 		Msg("unmounting directory")
@@ -738,14 +743,14 @@ func (c *multipassClient) UnmountInstance(instanceName string, targetPath string
 	cmd := exec.CommandContext(ctx, "multipass", args...)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().
+		logger.Multipass.Load().Error().
 			Err(err).
 			Str("instance", instanceName).
 			Msg("failed to unmount directory")
 		return fmt.Errorf("failed to unmount directory: %w", err)
 	}
 
-	logger.Multipass.Info().
+	logger.Multipass.Load().Info().
 		Str("instance", instanceName).
 		Str("target", targetPath).
 		Msg("directory unmounted")
@@ -783,7 +788,7 @@ func (c *multipassClient) UploadFile(instanceName string, localPath string, targ
 
 	args := []string{"transfer", "--parents", localPath, instanceName + ":" + targetPath}
 
-	logger.Multipass.Info().
+	logger.Multipass.Load().Info().
 		Str("instance", instanceName).
 		Str("local", localPath).
 		Str("target", targetPath).
@@ -795,21 +800,21 @@ func (c *multipassClient) UploadFile(instanceName string, localPath string, targ
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			stderrOut = string(exitErr.Stderr)
-			logger.Multipass.Error().
+			logger.Multipass.Load().Error().
 				Err(err).
 				Str("instance", instanceName).
 				Str("stderr", stderrOut).
 				Msg("failed to upload file")
 			return fmt.Errorf("failed to upload file: %s", stderrOut)
 		}
-		logger.Multipass.Error().
+		logger.Multipass.Load().Error().
 			Err(err).
 			Str("instance", instanceName).
 			Msg("failed to upload file")
 		return fmt.Errorf("failed to upload file: %w", err)
 	}
 
-	logger.Multipass.Info().
+	logger.Multipass.Load().Info().
 		Str("instance", instanceName).
 		Str("target", targetPath).
 		Msg("file uploaded to instance")
@@ -820,15 +825,15 @@ func (c *multipassClient) PurgeDeleted() error {
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Info().Msg("purging deleted instances")
+	logger.Multipass.Load().Info().Msg("purging deleted instances")
 	cmd := exec.CommandContext(ctx, "multipass", "purge")
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Msg("failed to purge")
+		logger.Multipass.Load().Error().Err(err).Msg("failed to purge")
 		return fmt.Errorf("failed to purge: %w", err)
 	}
 
-	logger.Multipass.Info().Msg("purged deleted instances")
+	logger.Multipass.Load().Info().Msg("purged deleted instances")
 	return nil
 }
 
@@ -844,14 +849,14 @@ func (c *multipassClient) CreateSnapshot(instanceName string, snapshotName strin
 	wasRunning := instance.State == "Running"
 
 	if wasRunning {
-		logger.Multipass.Info().Str("instance", instanceName).Msg("stopping instance for snapshot")
+		logger.Multipass.Load().Info().Str("instance", instanceName).Msg("stopping instance for snapshot")
 		stopCtx, stopCancel := context.WithTimeout(context.Background(), c.timeout)
 		defer stopCancel()
 
 		cmd := exec.CommandContext(stopCtx, "multipass", "stop", instanceName)
 		_, err = cmd.Output()
 		if err != nil {
-			logger.Multipass.Error().Err(err).Str("instance", instanceName).Msg("failed to stop instance for snapshot")
+			logger.Multipass.Load().Error().Err(err).Str("instance", instanceName).Msg("failed to stop instance for snapshot")
 			return fmt.Errorf("failed to stop instance: %w", err)
 		}
 
@@ -869,7 +874,7 @@ func (c *multipassClient) CreateSnapshot(instanceName string, snapshotName strin
 		if instance.State != "Stopped" {
 			return fmt.Errorf("instance did not stop in time, current state: %s", instance.State)
 		}
-		logger.Multipass.Info().Str("instance", instanceName).Msg("instance stopped, creating snapshot")
+		logger.Multipass.Load().Info().Str("instance", instanceName).Msg("instance stopped, creating snapshot")
 	}
 
 	args := []string{"snapshot", instanceName}
@@ -877,11 +882,11 @@ func (c *multipassClient) CreateSnapshot(instanceName string, snapshotName strin
 		args = append(args, snapshotName)
 	}
 
-	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("creating snapshot")
+	logger.Multipass.Load().Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("creating snapshot")
 	cmd := exec.CommandContext(ctx, "multipass", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("instance", instanceName).Msg("failed to create snapshot")
+		logger.Multipass.Load().Error().Err(err).Str("instance", instanceName).Msg("failed to create snapshot")
 		return fmt.Errorf("failed to create snapshot: %w", err)
 	}
 
@@ -891,13 +896,13 @@ func (c *multipassClient) CreateSnapshot(instanceName string, snapshotName strin
 		setCmd := exec.CommandContext(setCtx, "multipass", "set", fmt.Sprintf("local.%s.%s.comment=%s", instanceName, snapshotName, comment))
 		_, setErr := setCmd.Output()
 		if setErr != nil {
-			logger.Multipass.Warn().Err(setErr).Str("instance", instanceName).Str("snapshot", snapshotName).Msg("failed to set snapshot comment")
+			logger.Multipass.Load().Warn().Err(setErr).Str("instance", instanceName).Str("snapshot", snapshotName).Msg("failed to set snapshot comment")
 		}
 	}
 
 	_ = output
 
-	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("snapshot created")
+	logger.Multipass.Load().Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("snapshot created")
 	return nil
 }
 
@@ -910,15 +915,15 @@ func (c *multipassClient) RestoreSnapshot(instanceName string, snapshotName stri
 		args = append(args, snapshotName)
 	}
 
-	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("restoring snapshot")
+	logger.Multipass.Load().Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("restoring snapshot")
 	cmd := exec.CommandContext(ctx, "multipass", args...)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("instance", instanceName).Msg("failed to restore snapshot")
+		logger.Multipass.Load().Error().Err(err).Str("instance", instanceName).Msg("failed to restore snapshot")
 		return fmt.Errorf("failed to restore snapshot: %w", err)
 	}
 
-	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("snapshot restored")
+	logger.Multipass.Load().Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("snapshot restored")
 	return nil
 }
 
@@ -973,15 +978,15 @@ func (c *multipassClient) DeleteSnapshot(instanceName string, snapshotName strin
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("deleting snapshot")
+	logger.Multipass.Load().Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("deleting snapshot")
 	cmd := exec.CommandContext(ctx, "multipass", "delete", instanceName, "--snapshot", snapshotName)
 	_, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("instance", instanceName).Msg("failed to delete snapshot")
+		logger.Multipass.Load().Error().Err(err).Str("instance", instanceName).Msg("failed to delete snapshot")
 		return fmt.Errorf("failed to delete snapshot: %w", err)
 	}
 
-	logger.Multipass.Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("snapshot deleted")
+	logger.Multipass.Load().Info().Str("instance", instanceName).Str("snapshot", snapshotName).Msg("snapshot deleted")
 	return nil
 }
 
@@ -989,14 +994,14 @@ func (c *multipassClient) ExportInstance(instanceName string, outputPath string)
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout*3)
 	defer cancel()
 
-	logger.Multipass.Info().Str("instance", instanceName).Str("output", outputPath).Msg("exporting instance")
+	logger.Multipass.Load().Info().Str("instance", instanceName).Str("output", outputPath).Msg("exporting instance")
 	instance, err := c.GetInstance(instanceName)
 	if err != nil {
 		return "", err
 	}
 
 	if instance.State != "Stopped" {
-		logger.Multipass.Info().Str("instance", instanceName).Msg("stopping instance for export")
+		logger.Multipass.Load().Info().Str("instance", instanceName).Msg("stopping instance for export")
 		if err := c.StopInstance(instanceName); err != nil {
 			return "", fmt.Errorf("instance must be stopped for export: %w", err)
 		}
@@ -1010,11 +1015,11 @@ func (c *multipassClient) ExportInstance(instanceName string, outputPath string)
 	cmd := exec.CommandContext(ctx, "multipass", "export", instanceName, outputPath)
 	_, err = cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("instance", instanceName).Msg("failed to export instance")
+		logger.Multipass.Load().Error().Err(err).Str("instance", instanceName).Msg("failed to export instance")
 		return "", fmt.Errorf("failed to export instance: %w", err)
 	}
 
-	logger.Multipass.Info().Str("instance", instanceName).Str("output", outputPath).Msg("instance exported")
+	logger.Multipass.Load().Info().Str("instance", instanceName).Str("output", outputPath).Msg("instance exported")
 	return outputPath, nil
 }
 
@@ -1039,11 +1044,11 @@ func (c *multipassClient) ImportInstance(imagePath string, name string, cpus int
 
 	args = append(args, imagePath)
 
-	logger.Multipass.Info().Str("image", imagePath).Str("name", name).Msg("importing instance")
+	logger.Multipass.Load().Info().Str("image", imagePath).Str("name", name).Msg("importing instance")
 	cmd := exec.CommandContext(ctx, "multipass", args...)
 	output, err := cmd.Output()
 	if err != nil {
-		logger.Multipass.Error().Err(err).Str("image", imagePath).Msg("failed to import instance")
+		logger.Multipass.Load().Error().Err(err).Str("image", imagePath).Msg("failed to import instance")
 		return nil, fmt.Errorf("failed to import instance: %w", err)
 	}
 
@@ -1052,7 +1057,7 @@ func (c *multipassClient) ImportInstance(imagePath string, name string, cpus int
 		parts := strings.Split(outputStr, ":")
 		if len(parts) >= 2 {
 			instanceName := strings.TrimSpace(parts[1])
-			logger.Multipass.Info().Str("name", instanceName).Msg("instance imported")
+			logger.Multipass.Load().Info().Str("name", instanceName).Msg("instance imported")
 			return c.GetInstance(instanceName)
 		}
 	}
@@ -1238,7 +1243,7 @@ func (c *multipassClient) SetInstanceResources(name string, cpus int, memory str
 	defer cancel()
 
 	if cpus > 0 && cpus != instance.CPU {
-		logger.Multipass.Info().Str("name", name).Int("cpus", cpus).Int("current", instance.CPU).Msg("setting CPU")
+		logger.Multipass.Load().Info().Str("name", name).Int("cpus", cpus).Int("current", instance.CPU).Msg("setting CPU")
 		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.cpus=%d", name, cpus))
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -1247,7 +1252,7 @@ func (c *multipassClient) SetInstanceResources(name string, cpus int, memory str
 	}
 
 	if memory != "" && memory != instance.Memory {
-		logger.Multipass.Info().Str("name", name).Str("memory", memory).Str("current", instance.Memory).Msg("setting memory")
+		logger.Multipass.Load().Info().Str("name", name).Str("memory", memory).Str("current", instance.Memory).Msg("setting memory")
 		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.memory=%s", name, memory))
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -1256,7 +1261,7 @@ func (c *multipassClient) SetInstanceResources(name string, cpus int, memory str
 	}
 
 	if disk != "" && disk != instance.Disk {
-		logger.Multipass.Info().Str("name", name).Str("disk", disk).Str("current", instance.Disk).Msg("setting disk")
+		logger.Multipass.Load().Info().Str("name", name).Str("disk", disk).Str("current", instance.Disk).Msg("setting disk")
 		cmd := exec.CommandContext(ctx, "multipass", "set", fmt.Sprintf("local.%s.disk=%s", name, disk))
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -1264,7 +1269,7 @@ func (c *multipassClient) SetInstanceResources(name string, cpus int, memory str
 		}
 	}
 
-	logger.Multipass.Info().Str("name", name).Msg("instance resources updated")
+	logger.Multipass.Load().Info().Str("name", name).Msg("instance resources updated")
 	return nil
 }
 

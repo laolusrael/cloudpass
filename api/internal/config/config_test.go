@@ -67,7 +67,8 @@ func TestLoad_EmptyConfig(t *testing.T) {
 
 	assert.Equal(t, "0.0.0.0", cfg.Server.Host)
 	assert.Equal(t, 8080, cfg.Server.Port)
-	assert.Empty(t, cfg.Security.AllowedIPs)
+	assert.NotEmpty(t, cfg.Security.AllowedIPs)
+	assert.Contains(t, cfg.Security.AllowedIPs, "127.0.0.0/8")
 	assert.Equal(t, 30, cfg.Security.WebsocketTimeoutMin)
 	assert.Equal(t, DetectSocketPath(), cfg.Multipass.SocketPath)
 	assert.Equal(t, 1800, cfg.Multipass.DefaultTimeoutSec)

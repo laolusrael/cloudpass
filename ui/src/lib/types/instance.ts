@@ -129,15 +129,6 @@ export interface SnapshotResponse {
 	instance_started?: boolean;
 }
 
-export interface InstanceState {
-	name: string;
-	state: string;
-}
-
-export interface SnapshotList {
-	snapshots: Snapshot[];
-}
-
 export interface CreateSnapshotRequest {
 	name?: string;
 	comment?: string;

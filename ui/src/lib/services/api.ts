@@ -36,6 +36,11 @@ class ApiService {
 			}
 		});
 
+		if (response.status === 403) {
+			window.location.href = '/unauthorized';
+			throw new Error('Access denied');
+		}
+
 		if (!response.ok) {
 			const error: ErrorResponse = await response.json();
 			throw new Error(error.message || 'An error occurred');
@@ -208,6 +213,11 @@ class ApiService {
 				body: formData
 			}
 		);
+
+		if (response.status === 403) {
+			window.location.href = '/unauthorized';
+			throw new Error('Access denied');
+		}
 
 		if (!response.ok) {
 			const error = await response.json();
