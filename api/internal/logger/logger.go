@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"cloudpass/internal/config"
+
 	"github.com/rs/zerolog"
 )
 
@@ -21,43 +22,37 @@ func (a *atomicLogger) Load() *zerolog.Logger {
 	return a.ptr.Load()
 }
 
-func (a *atomicLogger) Store(l zerolog.Logger) {
-	a.ptr.Store(&l)
+func (a *atomicLogger) Store(l *zerolog.Logger) {
+	a.ptr.Store(l)
 }
 
 var (
 	API       atomicLogger
 	Multipass atomicLogger
 	Websocket atomicLogger
-
-	logCfg    config.LoggingConfig
 	logMu     sync.Mutex
-	logOutput io.Writer
 )
 
 func init() {
 	noop := zerolog.Nop()
-	API.Store(noop)
-	Multipass.Store(noop)
-	Websocket.Store(noop)
+	API.Store(&noop)
+	Multipass.Store(&noop)
+	Websocket.Store(&noop)
 }
 
 func Init(cfg config.LoggingConfig) error {
 	logMu.Lock()
 	defer logMu.Unlock()
 
-	logCfg = cfg
-
 	w, err := createWriter(cfg)
 	if err != nil {
 		return err
 	}
-	logOutput = w
 
 	zerolog.TimeFieldFormat = time.RFC3339
 	zerolog.SetGlobalLevel(parseLevel(cfg.Level))
 
-	baseLogger := zerolog.New(logOutput)
+	baseLogger := zerolog.New(w)
 
 	api := baseLogger.With().Str("component", "api").Logger()
 	mp := baseLogger.With().Str("component", "multipass").Logger()
@@ -73,9 +68,9 @@ func Init(cfg config.LoggingConfig) error {
 		ws = ws.Level(parseLevel(cfg.Levels.Websocket))
 	}
 
-	API.Store(api)
-	Multipass.Store(mp)
-	Websocket.Store(ws)
+	API.Store(&api)
+	Multipass.Store(&mp)
+	Websocket.Store(&ws)
 
 	return nil
 }
@@ -85,17 +80,14 @@ func Reinit(cfg config.LoggingConfig) error {
 	logMu.Lock()
 	defer logMu.Unlock()
 
-	logCfg = cfg
-
 	w, err := createWriter(cfg)
 	if err != nil {
 		return err
 	}
-	logOutput = w
 
 	zerolog.SetGlobalLevel(parseLevel(cfg.Level))
 
-	baseLogger := zerolog.New(logOutput)
+	baseLogger := zerolog.New(w)
 
 	api := baseLogger.With().Str("component", "api").Logger()
 	mp := baseLogger.With().Str("component", "multipass").Logger()
@@ -111,9 +103,9 @@ func Reinit(cfg config.LoggingConfig) error {
 		ws = ws.Level(parseLevel(cfg.Levels.Websocket))
 	}
 
-	API.Store(api)
-	Multipass.Store(mp)
-	Websocket.Store(ws)
+	API.Store(&api)
+	Multipass.Store(&mp)
+	Websocket.Store(&ws)
 
 	return nil
 }
