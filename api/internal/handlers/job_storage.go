@@ -30,7 +30,7 @@ func NewJobStorage(dataDir string) (*JobStorage, error) {
 	}
 
 	if err := storage.load(); err != nil {
-		logger.API.Warn().Err(err).Msg("failed to load jobs file, starting fresh")
+		logger.API.Load().Warn().Err(err).Msg("failed to load jobs file, starting fresh")
 	}
 
 	return storage, nil
@@ -56,7 +56,7 @@ func (s *JobStorage) load() error {
 		s.jobs[job.ID] = job
 	}
 
-	logger.API.Info().Int("count", len(s.jobs)).Msg("loaded jobs from storage")
+	logger.API.Load().Info().Int("count", len(s.jobs)).Msg("loaded jobs from storage")
 	return nil
 }
 
@@ -109,7 +109,7 @@ func (s *JobStorage) Set(job *models.Job) {
 	s.mu.Unlock()
 
 	if err := s.save(); err != nil {
-		logger.API.Error().Err(err).Str("job_id", job.ID).Msg("failed to save job")
+		logger.API.Load().Error().Err(err).Str("job_id", job.ID).Msg("failed to save job")
 	}
 }
 
@@ -119,7 +119,7 @@ func (s *JobStorage) Delete(id string) {
 	s.mu.Unlock()
 
 	if err := s.save(); err != nil {
-		logger.API.Error().Err(err).Str("job_id", id).Msg("failed to delete job")
+		logger.API.Load().Error().Err(err).Str("job_id", id).Msg("failed to delete job")
 	}
 }
 
@@ -142,9 +142,9 @@ func (s *JobStorage) Cleanup(maxAge time.Duration) int {
 
 	if deleted > 0 {
 		if err := s.save(); err != nil {
-			logger.API.Error().Err(err).Msg("failed to save after cleanup")
+			logger.API.Load().Error().Err(err).Msg("failed to save after cleanup")
 		}
-		logger.API.Info().Int("deleted", deleted).Msg("cleaned up old jobs")
+		logger.API.Load().Info().Int("deleted", deleted).Msg("cleaned up old jobs")
 	}
 
 	return deleted

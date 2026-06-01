@@ -20,7 +20,7 @@ func IPWhitelist(cfgManager *config.ConfigManager) echo.MiddlewareFunc {
 			for _, cidr := range allowedCIDRs {
 				_, ipnet, err := net.ParseCIDR(cidr)
 				if err != nil {
-					logger.API.Warn().Str("cidr", cidr).Msg("invalid CIDR in allowed_ips config")
+					logger.API.Load().Warn().Str("cidr", cidr).Msg("invalid CIDR in allowed_ips config")
 					continue
 				}
 				cidrs = append(cidrs, ipnet)
@@ -51,7 +51,7 @@ func IPWhitelist(cfgManager *config.ConfigManager) echo.MiddlewareFunc {
 			}
 
 			if !allowed {
-				logger.API.Warn().Str("ip", clientIP).Msg("access denied: IP not whitelisted")
+				logger.API.Load().Warn().Str("ip", clientIP).Msg("access denied: IP not whitelisted")
 				return c.JSON(http.StatusForbidden, models.ErrorResponse{
 					Error:   "forbidden",
 					Message: "access denied: IP not whitelisted",

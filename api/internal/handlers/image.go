@@ -21,14 +21,14 @@ func NewImageHandler(client multipass.Client) *ImageHandler {
 func (h *ImageHandler) List(c echo.Context) error {
 	images, err := h.client.ListImages()
 	if err != nil {
-		logger.API.Error().Err(err).Msg("failed to list images")
+		logger.API.Load().Error().Err(err).Msg("failed to list images")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
 			Message: err.Error(),
 		})
 	}
 
-	logger.API.Debug().Int("count", len(images)).Msg("listed images")
+	logger.API.Load().Debug().Int("count", len(images)).Msg("listed images")
 	return c.JSON(http.StatusOK, models.ImageList{
 		Images: images,
 	})

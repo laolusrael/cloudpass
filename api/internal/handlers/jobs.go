@@ -95,7 +95,7 @@ func (h *JobHandler) Stream(c echo.Context) error {
 					return nil
 				default:
 					if _, err := c.Response().Write([]byte("data: " + string(data) + "\n\n")); err != nil {
-						logger.API.Debug().Err(err).Msg("SSE initial write error")
+						logger.API.Load().Debug().Err(err).Msg("SSE initial write error")
 						return nil
 					}
 					flusher.Flush()
@@ -112,11 +112,11 @@ func (h *JobHandler) Stream(c echo.Context) error {
 		case event := <-ch:
 			data, err := json.Marshal(event)
 			if err != nil {
-				logger.API.Error().Err(err).Msg("failed to marshal event")
+				logger.API.Load().Error().Err(err).Msg("failed to marshal event")
 				continue
 			}
 			if _, err := c.Response().Write([]byte("data: " + string(data) + "\n\n")); err != nil {
-				logger.API.Debug().Err(err).Msg("SSE write error, closing connection")
+				logger.API.Load().Debug().Err(err).Msg("SSE write error, closing connection")
 				return nil
 			}
 			flusher.Flush()
@@ -126,13 +126,13 @@ func (h *JobHandler) Stream(c echo.Context) error {
 				return nil
 			default:
 				if _, err := c.Response().Write([]byte(": heartbeat\n\n")); err != nil {
-					logger.API.Debug().Err(err).Msg("SSE heartbeat write error, closing connection")
+					logger.API.Load().Debug().Err(err).Msg("SSE heartbeat write error, closing connection")
 					return nil
 				}
 				flusher.Flush()
 			}
 		case <-c.Request().Context().Done():
-			logger.API.Debug().Msg("SSE client disconnected")
+			logger.API.Load().Debug().Msg("SSE client disconnected")
 			return nil
 		}
 	}
@@ -141,7 +141,7 @@ func (h *JobHandler) Stream(c echo.Context) error {
 func (h *JobHandler) CreateInstanceAsync(c echo.Context) error {
 	var req models.CreateInstanceRequest
 	if err := c.Bind(&req); err != nil {
-		logger.API.Warn().Err(err).Str("ip", c.RealIP()).Msg("invalid request body")
+		logger.API.Load().Warn().Err(err).Str("ip", c.RealIP()).Msg("invalid request body")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "invalid request body",
@@ -150,7 +150,7 @@ func (h *JobHandler) CreateInstanceAsync(c echo.Context) error {
 
 	if req.Name != "" {
 		if err := validateInstanceName(req.Name); err != nil {
-			logger.API.Warn().Err(err).Str("ip", c.RealIP()).Str("name", req.Name).Msg("invalid instance name")
+			logger.API.Load().Warn().Err(err).Str("ip", c.RealIP()).Str("name", req.Name).Msg("invalid instance name")
 			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 				Error:   "invalid_request",
 				Message: err.Error(),
@@ -181,7 +181,7 @@ func (h *JobHandler) CreateInstanceAsync(c echo.Context) error {
 
 	go h.runInstanceCreation(jobID, req, instanceName)
 
-	logger.API.Info().Str("job_id", jobID).Str("instance", instanceName).Msg("instance creation job started")
+	logger.API.Load().Info().Str("job_id", jobID).Str("instance", instanceName).Msg("instance creation job started")
 
 	return c.JSON(http.StatusAccepted, models.JobResponse{Job: job})
 }
@@ -189,7 +189,7 @@ func (h *JobHandler) CreateInstanceAsync(c echo.Context) error {
 func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstanceRequest, instanceName string) {
 	job, ok := h.storage.Get(jobID)
 	if !ok {
-		logger.API.Error().Str("job_id", jobID).Msg("job not found")
+		logger.API.Load().Error().Str("job_id", jobID).Msg("job not found")
 		return
 	}
 
@@ -199,7 +199,7 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 	if h.eventHub != nil {
 		h.eventHub.BroadcastJobUpdate(job)
 	}
-	logger.API.Info().Str("job_id", jobID).Msg("job status: running")
+	logger.API.Load().Info().Str("job_id", jobID).Msg("job status: running")
 
 	opts := models.CreateInstanceRequest{
 		Name:      instanceName,
@@ -222,7 +222,7 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 				h.eventHub.BroadcastJobUpdate(job)
 			}
 		}
-		logger.API.Error().Err(err).Str("job_id", jobID).Str("instance", instanceName).Msg("failed to start instance creation")
+		logger.API.Load().Error().Err(err).Str("job_id", jobID).Str("instance", instanceName).Msg("failed to start instance creation")
 		return
 	}
 
@@ -238,7 +238,7 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 		if h.eventHub != nil {
 			h.eventHub.BroadcastJobUpdate(job)
 		}
-		logger.API.Error().Err(err).Str("job_id", jobID).Str("instance", instanceName).Msg("instance creation failed")
+		logger.API.Load().Error().Err(err).Str("job_id", jobID).Str("instance", instanceName).Msg("instance creation failed")
 		return
 	}
 
@@ -249,5 +249,5 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 	if h.eventHub != nil {
 		h.eventHub.BroadcastJobUpdate(job)
 	}
-	logger.API.Info().Str("job_id", jobID).Str("instance", instance.Name).Msg("instance creation completed")
+	logger.API.Load().Info().Str("job_id", jobID).Str("instance", instance.Name).Msg("instance creation completed")
 }

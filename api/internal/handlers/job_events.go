@@ -31,7 +31,7 @@ func (h *EventHub) Subscribe() chan JobEvent {
 	h.mu.Lock()
 	h.subscribers[ch] = struct{}{}
 	h.mu.Unlock()
-	logger.API.Debug().Msg("client subscribed to job events")
+	logger.API.Load().Debug().Msg("client subscribed to job events")
 	return ch
 }
 
@@ -40,7 +40,7 @@ func (h *EventHub) Unsubscribe(ch chan JobEvent) {
 	if _, ok := h.subscribers[ch]; ok {
 		delete(h.subscribers, ch)
 		close(ch)
-		logger.API.Debug().Msg("client unsubscribed from job events")
+		logger.API.Load().Debug().Msg("client unsubscribed from job events")
 	}
 	h.mu.Unlock()
 }
@@ -49,13 +49,13 @@ func (h *EventHub) Publish(event JobEvent) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
 
-	logger.API.Debug().Str("type", event.Type).Str("job_id", event.Job.ID).Msg("publishing job event")
+	logger.API.Load().Debug().Str("type", event.Type).Str("job_id", event.Job.ID).Msg("publishing job event")
 
 	for ch := range h.subscribers {
 		select {
 		case ch <- event:
 		default:
-			logger.API.Warn().Msg("failed to send event to subscriber, channel full")
+			logger.API.Load().Warn().Msg("failed to send event to subscriber, channel full")
 		}
 	}
 }

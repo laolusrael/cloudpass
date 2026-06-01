@@ -1,6 +1,7 @@
 package config
 
 import (
+	"fmt"
 	"net"
 	"sort"
 	"sync"
@@ -8,7 +9,7 @@ import (
 
 // DetectLocalNetworks scans all network interfaces and returns CIDR ranges
 // for RFC1918 private networks (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
-// plus the loopback range (127.0.0.0/8).
+// plus loopback ranges (127.0.0.0/8, ::1/128) and IPv6 ULA (fd00::/8).
 func DetectLocalNetworks() []string {
 	privateCIDRs := []string{
 		"10.0.0.0/8",
@@ -18,14 +19,19 @@ func DetectLocalNetworks() []string {
 
 	privateNets := make([]*net.IPNet, 0, len(privateCIDRs))
 	for _, cidr := range privateCIDRs {
-		_, ipnet, _ := net.ParseCIDR(cidr)
-		if ipnet != nil {
-			privateNets = append(privateNets, ipnet)
+		_, ipnet, err := net.ParseCIDR(cidr)
+		if err != nil {
+			continue
 		}
+		privateNets = append(privateNets, ipnet)
 	}
+
+	_, ipv6ULA, _ := net.ParseCIDR("fd00::/8")
+	_, ipv6Loopback, _ := net.ParseCIDR("::1/128")
 
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
+		fmt.Printf("Warning: failed to enumerate network interfaces: %v\n", err)
 		return []string{"127.0.0.0/8"}
 	}
 
@@ -39,24 +45,38 @@ func DetectLocalNetworks() []string {
 			continue
 		}
 
-		ip := ipNet.IP.To4()
-		if ip == nil {
-			continue
-		}
+		ip := ipNet.IP
 
-		for _, privateNet := range privateNets {
-			if privateNet.Contains(ip) {
+		if ip4 := ip.To4(); ip4 != nil {
+			for _, privateNet := range privateNets {
+				if privateNet.Contains(ip) {
+					cidr := ipNet.String()
+					if !seen[cidr] {
+						seen[cidr] = true
+						result = append(result, cidr)
+						fmt.Printf("  Detected local network: %s\n", cidr)
+					}
+					break
+				}
+			}
+		} else if ip.To16() != nil {
+			if ipv6ULA.Contains(ip) || ipv6Loopback.Contains(ip) {
 				cidr := ipNet.String()
 				if !seen[cidr] {
 					seen[cidr] = true
 					result = append(result, cidr)
+					fmt.Printf("  Detected local network (IPv6): %s\n", cidr)
 				}
-				break
 			}
 		}
 	}
 
 	sort.Strings(result)
+
+	if len(result) == 1 {
+		fmt.Println("  No local private networks detected, only loopback will be allowed")
+	}
+
 	return result
 }
 
