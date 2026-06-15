@@ -119,16 +119,30 @@ func main() {
 	e.HideBanner = true
 	e.HidePort = true
 
+	csrfStore := middleware.NewCSRFStore()
+
 	e.Use(echoMiddleware.Recover())
 	e.Use(middleware.Logging())
 	e.Use(middleware.RateLimit())
 
-	e.Use(echoMiddleware.CORS())
+	corsConfig := echoMiddleware.CORSConfig{
+		Skipper: func(c echo.Context) bool {
+			return false
+		},
+		AllowHeaders: []string{"X-CSRF-Token", "Content-Type", "Authorization"},
+	}
+	allowedOrigins := cfgManager.GetCORSAllowedOrigins()
+	if len(allowedOrigins) > 0 {
+		corsConfig.AllowOrigins = allowedOrigins
+		corsConfig.AllowCredentials = true
+		corsConfig.MaxAge = 86400
+	}
+	e.Use(echoMiddleware.CORSWithConfig(corsConfig))
 
+	e.GET("/api/health", healthHandler.Health)
 	api := e.Group("/api")
-	api.Use(middleware.IPWhitelist(cfgManager))
-
-	api.GET("/health", healthHandler.Health)
+	api.Use(middleware.NewIPWhitelist(cfgManager))
+	api.Use(middleware.NewCSRF(csrfStore))
 	api.GET("/instances", instanceHandler.List)
 	api.POST("/instances", instanceHandler.Create)
 	api.POST("/instances/async", jobHandler.CreateInstanceAsync)
@@ -161,6 +175,7 @@ func main() {
 	api.GET("/jobs/stream", jobHandler.Stream)
 	api.GET("/config", configHandler.Get)
 	api.POST("/config", configHandler.Update)
+	api.GET("/csrf/token", middleware.CSRFTokenHandler(csrfStore))
 	api.GET("/host", hostHandler.GetInfo)
 
 	e.GET("/*", web.StaticHandlerWithFallback())

@@ -36,6 +36,8 @@ type UploadConfig struct {
 type SecurityConfig struct {
 	AllowedIPs          []string `yaml:"allowed_ips"`
 	WebsocketTimeoutMin int      `yaml:"websocket_idle_timeout_minutes"`
+	CORSAllowedOrigins  []string `yaml:"cors_allowed_origins"`
+	EnableProxyHeader  bool     `yaml:"enable_proxy_header"`
 }
 
 type MultipassConfig struct {
@@ -80,8 +82,10 @@ var defaultConfig = Config{
 		Port: 8080,
 	},
 	Security: SecurityConfig{
-		AllowedIPs:          []string{},
-		WebsocketTimeoutMin: 30,
+		AllowedIPs:           []string{},
+		WebsocketTimeoutMin:  30,
+		CORSAllowedOrigins:   []string{},
+		EnableProxyHeader:    true,
 	},
 	Multipass: MultipassConfig{
 		SocketPath:        "",
