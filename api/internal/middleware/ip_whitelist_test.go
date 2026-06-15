@@ -3,6 +3,7 @@ package middleware
 import (
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"testing"
 
 	"cloudpass/internal/config"
@@ -211,7 +212,10 @@ func TestIPWhitelist_HotReload(t *testing.T) {
 			AllowedIPs: []string{"192.168.1.0/24"},
 		},
 	}
-	cfgManager := config.NewConfigManager(cfg, "")
+
+	tmpDir := t.TempDir()
+	cfgPath := filepath.Join(tmpDir, "config.yaml")
+	cfgManager := config.NewConfigManager(cfg, cfgPath)
 
 	handler := IPWhitelist(cfgManager)(func(c echo.Context) error {
 		return c.String(http.StatusOK, "allowed")

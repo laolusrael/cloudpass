@@ -175,14 +175,12 @@ type ServerConfigResponse struct {
 }
 
 type SecurityConfigResponse struct {
-	AllowedIPs          []string `json:"allowed_ips"`
-	WebsocketTimeoutMin int      `json:"websocket_timeout_minutes"`
+	WebsocketTimeoutMin int `json:"websocket_timeout_minutes"`
 }
 
 type MultipassConfigResponse struct {
 	SocketPath        string `json:"socket_path"`
 	DefaultTimeoutSec int    `json:"default_timeout_seconds"`
-	SSHKeyPath        string `json:"ssh_key_path"`
 }
 
 type LoggingConfigResponse struct {

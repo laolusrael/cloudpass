@@ -86,6 +86,7 @@ type ConfigManager struct {
 	mu         sync.RWMutex
 	cfg        *Config
 	configPath string
+	version    int64
 }
 
 // NewConfigManager creates a new ConfigManager from an existing config.
@@ -109,9 +110,17 @@ func (m *ConfigManager) Get() *Config {
 func (m *ConfigManager) Update(cfg *Config) error {
 	m.mu.Lock()
 	m.cfg = cfg
+	m.version++
 	m.mu.Unlock()
 
 	return m.Save()
+}
+
+// GetVersion returns the current config version, incremented on each update.
+func (m *ConfigManager) GetVersion() int64 {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return m.version
 }
 
 // Save writes the current configuration to disk.
@@ -179,4 +188,22 @@ func (m *ConfigManager) GetUploadConfig() UploadConfig {
 	defer m.mu.RUnlock()
 
 	return m.cfg.Upload
+}
+
+// GetCORSAllowedOrigins returns the allowed CORS origins.
+func (m *ConfigManager) GetCORSAllowedOrigins() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	origins := make([]string, len(m.cfg.Security.CORSAllowedOrigins))
+	copy(origins, m.cfg.Security.CORSAllowedOrigins)
+	return origins
+}
+
+// GetEnableProxyHeader returns whether proxy headers should be used.
+func (m *ConfigManager) GetEnableProxyHeader() bool {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	return m.cfg.Security.EnableProxyHeader
 }

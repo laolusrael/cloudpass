@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"net"
 	"net/http"
 	"strings"
 
@@ -19,6 +20,18 @@ func NewConfigHandler(cfgManager *config.ConfigManager) *ConfigHandler {
 	return &ConfigHandler{cfgManager: cfgManager}
 }
 
+func validateCIDR(cidr string) error {
+	_, _, err := net.ParseCIDR(cidr)
+	return err
+}
+
+func validatePort(port int) error {
+	if port < 1 || port > 65535 {
+		return http.ErrNoCookie
+	}
+	return nil
+}
+
 func (h *ConfigHandler) Get(c echo.Context) error {
 	cfg := h.cfgManager.Get()
 
@@ -28,13 +41,11 @@ func (h *ConfigHandler) Get(c echo.Context) error {
 			Port: cfg.Server.Port,
 		},
 		Security: models.SecurityConfigResponse{
-			AllowedIPs:          cfg.Security.AllowedIPs,
 			WebsocketTimeoutMin: cfg.Security.WebsocketTimeoutMin,
 		},
 		Multipass: models.MultipassConfigResponse{
 			SocketPath:        cfg.Multipass.SocketPath,
 			DefaultTimeoutSec: cfg.Multipass.DefaultTimeoutSec,
-			SSHKeyPath:        cfg.Multipass.SSHKeyPath,
 		},
 		Logging: models.LoggingConfigResponse{
 			Level:  cfg.Logging.Level,
@@ -66,6 +77,12 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 			needsRestart = true
 		}
 		if req.Server.Port > 0 {
+			if err := validatePort(req.Server.Port); err != nil {
+				return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+					Error:   "invalid_request",
+					Message: "port must be between 1 and 65535",
+				})
+			}
 			cfg.Server.Port = req.Server.Port
 			modified = true
 			needsRestart = true
@@ -74,6 +91,14 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 
 	if req.Security != nil {
 		if req.Security.AllowedIPs != nil {
+			for _, ip := range req.Security.AllowedIPs {
+				if err := validateCIDR(ip); err != nil {
+					return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+						Error:   "invalid_request",
+						Message: "invalid CIDR format: " + ip,
+					})
+				}
+			}
 			cfg.Security.AllowedIPs = req.Security.AllowedIPs
 			modified = true
 		}
@@ -99,15 +124,37 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 	}
 
 	if req.Logging != nil {
+		validLevels := map[string]bool{"trace": true, "debug": true, "info": true, "warn": true, "error": true, "fatal": true, "panic": true}
+		validFormats := map[string]bool{"console": true, "json": true}
+		validOutputs := map[string]bool{"stdout": true, "stderr": true, "file": true, "syslog": true}
+
 		if req.Logging.Level != "" {
+			if !validLevels[req.Logging.Level] {
+				return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+					Error:   "invalid_request",
+					Message: "invalid log level: " + req.Logging.Level,
+				})
+			}
 			cfg.Logging.Level = req.Logging.Level
 			modified = true
 		}
 		if req.Logging.Format != "" {
+			if !validFormats[req.Logging.Format] {
+				return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+					Error:   "invalid_request",
+					Message: "invalid log format: " + req.Logging.Format,
+				})
+			}
 			cfg.Logging.Format = req.Logging.Format
 			modified = true
 		}
 		if req.Logging.Output != "" {
+			if !validOutputs[req.Logging.Output] {
+				return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+					Error:   "invalid_request",
+					Message: "invalid log output: " + req.Logging.Output,
+				})
+			}
 			cfg.Logging.Output = req.Logging.Output
 			modified = true
 		}

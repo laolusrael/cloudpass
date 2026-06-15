@@ -27,13 +27,39 @@ import type {
 const API_BASE = '/api';
 
 class ApiService {
+	private csrfToken: string | null = null;
+
+	async initCSRF(): Promise<void> {
+		try {
+			const response = await fetch(`${API_BASE}/csrf/token`, {
+				credentials: 'include',
+			});
+			if (response.ok) {
+				const data = await response.json();
+				this.csrfToken = data.csrf_token || null;
+			}
+		} catch {
+			this.csrfToken = null;
+		}
+	}
+
 	private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+		const method = (options.method || 'GET').toUpperCase();
+		const isMutating = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
+
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json',
+			...options.headers,
+		};
+
+		if (isMutating && this.csrfToken) {
+			headers['X-CSRF-Token'] = this.csrfToken;
+		}
+
 		const response = await fetch(`${API_BASE}${endpoint}`, {
 			...options,
-			headers: {
-				'Content-Type': 'application/json',
-				...options.headers
-			}
+			credentials: 'include',
+			headers,
 		});
 
 		if (response.status === 403) {
