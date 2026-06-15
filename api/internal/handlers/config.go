@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"fmt"
 	"net"
 	"net/http"
 	"strings"
@@ -29,16 +28,6 @@ func validateCIDR(cidr string) error {
 func validatePort(port int) error {
 	if port < 1 || port > 65535 {
 		return http.ErrNoCookie
-	}
-	return nil
-}
-
-func validatePath(path string) error {
-	if path == "" {
-		return nil
-	}
-	if strings.Contains(path, "..") {
-		return fmt.Errorf("path contains invalid sequence")
 	}
 	return nil
 }
