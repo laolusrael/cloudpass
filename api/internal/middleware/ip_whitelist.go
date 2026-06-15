@@ -14,8 +14,8 @@ import (
 )
 
 type parsedCIDR struct {
-	ipNet  *net.IPNet
-	raw    string
+	ipNet *net.IPNet
+	raw   string
 }
 
 type IPWhitelistMiddleware struct {
@@ -92,7 +92,7 @@ func (m *IPWhitelistMiddleware) isAllowed(ip net.IP) bool {
 
 func (m *IPWhitelistMiddleware) refreshCIDRsIfNeeded() {
 	currentVersion := m.cfgManager.GetVersion()
-	
+
 	m.mu.RLock()
 	storedVersion := m.configVersion
 	m.mu.RUnlock()

@@ -18,20 +18,20 @@ const (
 )
 
 type rateLimiter struct {
-	mu       sync.RWMutex
-	requests map[string][]time.Time
-	limit    int
-	window   time.Duration
-	maxEntries int
+	mu          sync.RWMutex
+	requests    map[string][]time.Time
+	limit       int
+	window      time.Duration
+	maxEntries  int
 	stopCleanup chan struct{}
 }
 
 func newRateLimiter(limit int, window time.Duration) *rateLimiter {
 	rl := &rateLimiter{
-		requests:   make(map[string][]time.Time),
-		limit:      limit,
-		window:     window,
-		maxEntries: defaultMaxEntries,
+		requests:    make(map[string][]time.Time),
+		limit:       limit,
+		window:      window,
+		maxEntries:  defaultMaxEntries,
 		stopCleanup: make(chan struct{}),
 	}
 	go rl.cleanupLoop()
