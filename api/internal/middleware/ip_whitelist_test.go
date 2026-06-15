@@ -230,6 +230,9 @@ func TestIPWhitelist_HotReload(t *testing.T) {
 	assert.Equal(t, http.StatusForbidden, rec.Code)
 
 	cfg.Security.AllowedIPs = []string{"10.0.0.0/8", "192.168.1.0/24"}
+	if err := cfgManager.Update(cfg); err != nil {
+		t.Fatalf("failed to update config: %v", err)
+	}
 
 	req2 := httptest.NewRequest(http.MethodGet, "/", nil)
 	req2.RemoteAddr = "10.0.0.1:8080"
