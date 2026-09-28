@@ -21,6 +21,8 @@ type parsedCIDR struct {
 type IPWhitelistMiddleware struct {
 	cfgManager        *config.ConfigManager
 	parsedCIDRs       []parsedCIDR
+	fallbackCIDRs     []parsedCIDR
+	invalidEntries    []string
 	mu                sync.RWMutex
 	configVersion     int64
 	enableProxyHeader bool
@@ -30,7 +32,6 @@ func newIPWhitelistMiddleware(cfgManager *config.ConfigManager, enableProxyHeade
 	m := &IPWhitelistMiddleware{
 		cfgManager:        cfgManager,
 		enableProxyHeader: enableProxyHeader,
-		configVersion:     cfgManager.GetVersion(),
 	}
 	m.refreshCIDRs()
 	return m
@@ -42,18 +43,61 @@ func (m *IPWhitelistMiddleware) refreshCIDRs() {
 
 	allowedCIDRs := m.cfgManager.GetAllowedIPs()
 	m.parsedCIDRs = make([]parsedCIDR, 0, len(allowedCIDRs))
+	m.fallbackCIDRs = nil
+	m.invalidEntries = nil
+	m.configVersion = m.cfgManager.GetVersion()
 
-	for _, cidr := range allowedCIDRs {
-		_, ipnet, err := net.ParseCIDR(cidr)
+	var invalid []string
+	for _, entry := range allowedCIDRs {
+		ipNet, normalized, err := config.ParseAllowedIPEntry(entry)
 		if err != nil {
-			logger.API.Load().Warn().Str("cidr", cidr).Msg("invalid CIDR in allowed_ips config")
+			invalid = append(invalid, entry)
 			continue
 		}
+		if ones, _ := ipNet.Mask.Size(); ones == 0 {
+			logger.API.Load().Warn().Str("entry", normalized).Msg("allowed_ips entry permits all addresses")
+		}
 		m.parsedCIDRs = append(m.parsedCIDRs, parsedCIDR{
-			ipNet: ipnet,
-			raw:   cidr,
+			ipNet: ipNet,
+			raw:   normalized,
 		})
 	}
+
+	if len(invalid) > 0 {
+		logger.API.Load().Warn().Strs("entries", invalid).Msg("ignoring invalid allowed_ips entries")
+	}
+
+	if len(m.parsedCIDRs) > 0 {
+		return
+	}
+
+	// Fail-closed when entries were explicitly configured but none parsed:
+	// a typo must never silently widen access, so no fallback applies here.
+	// (The deny message stays generic; details go to the server log only.)
+	if len(allowedCIDRs) > 0 {
+		m.invalidEntries = invalid
+		logger.API.Load().Error().Strs("invalid_entries", invalid).Msg("no valid allowed IPs configured, denying all requests")
+		return
+	}
+
+	// Empty allowlist means "auto-detect": fall back to local networks so a
+	// fresh or reset config does not lock out legitimate local clients
+	// (e.g. VM creation from localhost).
+	for _, cidr := range config.DetectLocalNetworks() {
+		ipNet, normalized, err := config.ParseAllowedIPEntry(cidr)
+		if err != nil {
+			continue
+		}
+		m.fallbackCIDRs = append(m.fallbackCIDRs, parsedCIDR{
+			ipNet: ipNet,
+			raw:   normalized,
+		})
+	}
+	if len(m.fallbackCIDRs) == 0 {
+		return
+	}
+
+	logger.API.Load().Warn().Msg("no allowed IPs configured, falling back to auto-detected local networks")
 }
 
 func (m *IPWhitelistMiddleware) getClientIP(c echo.Context) string {
@@ -87,6 +131,11 @@ func (m *IPWhitelistMiddleware) isAllowed(ip net.IP) bool {
 			return true
 		}
 	}
+	for _, pc := range m.fallbackCIDRs {
+		if pc.ipNet.Contains(ip) {
+			return true
+		}
+	}
 	return false
 }
 
@@ -99,9 +148,6 @@ func (m *IPWhitelistMiddleware) refreshCIDRsIfNeeded() {
 
 	if currentVersion != storedVersion {
 		m.refreshCIDRs()
-		m.mu.Lock()
-		m.configVersion = currentVersion
-		m.mu.Unlock()
 	}
 }
 
@@ -109,11 +155,12 @@ func (m *IPWhitelistMiddleware) handleRequest(c echo.Context, next echo.HandlerF
 	m.refreshCIDRsIfNeeded()
 
 	m.mu.RLock()
-	cidrCount := len(m.parsedCIDRs)
+	cidrCount := len(m.parsedCIDRs) + len(m.fallbackCIDRs)
+	invalidEntries := append([]string(nil), m.invalidEntries...)
 	m.mu.RUnlock()
 
 	if cidrCount == 0 {
-		logger.API.Load().Warn().Msg("no allowed IPs configured, denying all requests")
+		logger.API.Load().Warn().Strs("invalid_entries", invalidEntries).Msg("no usable allowed IPs and auto-detect yielded nothing, denying all requests")
 		return c.JSON(http.StatusForbidden, models.ErrorResponse{
 			Error:   "forbidden",
 			Message: "access denied: no allowed IPs configured",
@@ -126,6 +173,11 @@ func (m *IPWhitelistMiddleware) handleRequest(c echo.Context, next echo.HandlerF
 			Error:   "forbidden",
 			Message: "access denied: no client IP",
 		})
+	}
+
+	// Strip any IPv6 zone identifier (e.g. "fe80::1%eth0") before parsing.
+	if i := strings.LastIndex(clientIP, "%"); i != -1 {
+		clientIP = clientIP[:i]
 	}
 
 	ip := net.ParseIP(clientIP)

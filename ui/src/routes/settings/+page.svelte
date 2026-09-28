@@ -167,7 +167,8 @@
 							placeholder="192.168.1.0/24, 10.0.0.0/8"
 						/>
 						<p class="mt-1 text-xs text-gray-500">
-							Comma-separated CIDR ranges. Leave empty to auto-detect local networks.
+							Comma-separated CIDR ranges or single IP addresses (e.g. 192.168.1.0/24,
+							192.168.1.100). Leave empty to auto-detect local networks.
 						</p>
 					</div>
 					<div>

@@ -175,7 +175,8 @@ type ServerConfigResponse struct {
 }
 
 type SecurityConfigResponse struct {
-	WebsocketTimeoutMin int `json:"websocket_timeout_minutes"`
+	AllowedIPs          []string `json:"allowed_ips"`
+	WebsocketTimeoutMin int      `json:"websocket_timeout_minutes"`
 }
 
 type MultipassConfigResponse struct {
