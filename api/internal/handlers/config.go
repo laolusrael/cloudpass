@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"net"
 	"net/http"
 	"strings"
 
@@ -20,8 +19,8 @@ func NewConfigHandler(cfgManager *config.ConfigManager) *ConfigHandler {
 	return &ConfigHandler{cfgManager: cfgManager}
 }
 
-func validateCIDR(cidr string) error {
-	_, _, err := net.ParseCIDR(cidr)
+func validateAllowedIP(entry string) error {
+	_, _, err := config.ParseAllowedIPEntry(entry)
 	return err
 }
 
@@ -41,6 +40,7 @@ func (h *ConfigHandler) Get(c echo.Context) error {
 			Port: cfg.Server.Port,
 		},
 		Security: models.SecurityConfigResponse{
+			AllowedIPs:          cfg.Security.AllowedIPs,
 			WebsocketTimeoutMin: cfg.Security.WebsocketTimeoutMin,
 		},
 		Multipass: models.MultipassConfigResponse{
@@ -92,10 +92,10 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 	if req.Security != nil {
 		if req.Security.AllowedIPs != nil {
 			for _, ip := range req.Security.AllowedIPs {
-				if err := validateCIDR(ip); err != nil {
+				if err := validateAllowedIP(ip); err != nil {
 					return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 						Error:   "invalid_request",
-						Message: "invalid CIDR format: " + ip,
+						Message: "invalid IP or CIDR format: " + ip,
 					})
 				}
 			}
@@ -178,7 +178,7 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 	var msg strings.Builder
 	msg.WriteString("Configuration updated.")
 
-	if req.Logging.Level != "" || req.Logging.Format != "" || req.Logging.Output != "" {
+	if req.Logging != nil && (req.Logging.Level != "" || req.Logging.Format != "" || req.Logging.Output != "") {
 		if err := logger.Reinit(cfg.Logging); err != nil {
 			logger.API.Load().Warn().Err(err).Msg("failed to reinit logger, changes will apply on restart")
 			msg.WriteString(" Logging changes will apply on restart.")
