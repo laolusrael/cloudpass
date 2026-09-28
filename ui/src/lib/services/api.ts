@@ -26,13 +26,32 @@ import type {
 
 const API_BASE = '/api';
 
+/** Client IP is not on the server allowlist. */
+export class IPForbiddenError extends Error {
+	constructor(message = 'Access denied') {
+		super(message);
+		this.name = 'IPForbiddenError';
+	}
+}
+
+/** CSRF session/token problem (expired, missing, or invalid token). */
+export class CSRFExpiredError extends Error {
+	code: string;
+
+	constructor(code: string, message = 'Session expired. Please try again.') {
+		super(message);
+		this.name = 'CSRFExpiredError';
+		this.code = code;
+	}
+}
+
 class ApiService {
 	private csrfToken: string | null = null;
 
 	async initCSRF(): Promise<void> {
 		try {
 			const response = await fetch(`${API_BASE}/csrf/token`, {
-				credentials: 'include',
+				credentials: 'include'
 			});
 			if (response.ok) {
 				const data = await response.json();
@@ -43,13 +62,17 @@ class ApiService {
 		}
 	}
 
-	private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+	private async request<T>(
+		endpoint: string,
+		options: RequestInit = {},
+		retried = false
+	): Promise<T> {
 		const method = (options.method || 'GET').toUpperCase();
 		const isMutating = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
 
 		const headers: Record<string, string> = {
 			'Content-Type': 'application/json',
-			...options.headers,
+			...options.headers
 		};
 
 		if (isMutating && this.csrfToken) {
@@ -59,12 +82,21 @@ class ApiService {
 		const response = await fetch(`${API_BASE}${endpoint}`, {
 			...options,
 			credentials: 'include',
-			headers,
+			headers
 		});
 
 		if (response.status === 403) {
-			window.location.href = '/unauthorized';
-			throw new Error('Access denied');
+			const err = await this.readForbiddenError(response);
+			if (err instanceof CSRFExpiredError && isMutating && !retried) {
+				// Token was missing/stale (e.g. raced boot, or rotated by a
+				// later GET): refresh once and retry a single time.
+				await this.initCSRF();
+				return this.request<T>(endpoint, options, true);
+			}
+			if (err instanceof IPForbiddenError) {
+				window.location.href = '/unauthorized';
+			}
+			throw err;
 		}
 
 		if (!response.ok) {
@@ -73,6 +105,30 @@ class ApiService {
 		}
 
 		return response.json();
+	}
+
+	/**
+	 * Classify a 403 response without side effects. Never throws and never
+	 * redirects — callers decide. Tolerates empty/non-JSON bodies.
+	 */
+	private async readForbiddenError(response: Response): Promise<Error> {
+		let code = '';
+		let message = '';
+		try {
+			const data = (await response.json()) as Partial<ErrorResponse>;
+			code = data.error || '';
+			message = data.message || '';
+		} catch {
+			// Non-JSON or empty body — fall through to the generic error.
+		}
+
+		if (code === 'forbidden') {
+			return new IPForbiddenError(message || 'Access denied');
+		}
+		if (code.startsWith('csrf_')) {
+			return new CSRFExpiredError(code, message || 'Session expired. Please try again.');
+		}
+		return new Error(message || 'Access denied');
 	}
 
 	async getInstances(): Promise<Instance[]> {
@@ -225,24 +281,45 @@ class ApiService {
 		});
 	}
 
-	async uploadFile(instanceName: string, file: File, targetPath?: string): Promise<UploadResponse> {
+	async uploadFile(
+		instanceName: string,
+		file: File,
+		targetPath?: string,
+		retried = false
+	): Promise<UploadResponse> {
 		const formData = new FormData();
 		formData.append('file', file);
 		if (targetPath) {
 			formData.append('target_path', targetPath);
 		}
 
+		// Note: no Content-Type header — the browser sets the multipart
+		// boundary automatically.
+		const headers: Record<string, string> = {};
+		if (this.csrfToken) {
+			headers['X-CSRF-Token'] = this.csrfToken;
+		}
+
 		const response = await fetch(
 			`${API_BASE}/instances/${encodeURIComponent(instanceName)}/upload`,
 			{
 				method: 'POST',
-				body: formData
+				body: formData,
+				credentials: 'include',
+				headers
 			}
 		);
 
 		if (response.status === 403) {
-			window.location.href = '/unauthorized';
-			throw new Error('Access denied');
+			const err = await this.readForbiddenError(response);
+			if (err instanceof CSRFExpiredError && !retried) {
+				await this.initCSRF();
+				return this.uploadFile(instanceName, file, targetPath, true);
+			}
+			if (err instanceof IPForbiddenError) {
+				window.location.href = '/unauthorized';
+			}
+			throw err;
 		}
 
 		if (!response.ok) {
