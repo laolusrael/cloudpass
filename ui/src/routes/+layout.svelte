@@ -2,6 +2,7 @@
 	import '../app.css';
 	import type { Snippet } from 'svelte';
 	import { onMount } from 'svelte';
+	import { api } from '$lib/services/api';
 	import { notifications } from '$lib/stores/notifications';
 	import { getAndClearStoredNotifications } from '$lib/stores/instances';
 	import { jobs } from '$lib/stores/jobs';
@@ -18,6 +19,11 @@
 		for (const n of stored) {
 			notifications.show(n.message, n.status === 'completed' ? 'success' : 'error');
 		}
+
+		// Fetch the CSRF token at boot so mutating requests carry
+		// X-CSRF-Token instead of failing with 403 csrf_token_missing.
+		// A POST racing the fetch is covered by the retry-once path.
+		void api.initCSRF();
 
 		jobs.startSSE();
 
