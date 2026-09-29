@@ -683,8 +683,9 @@ func (e *Executor) Execute(name string, args ...string) ([]byte, error) {
 |------|-------------|-------------|
 | `invalid_request` | 400 | Invalid request parameters |
 | `unauthorized` | 401 | Authentication failed |
-| `forbidden` | 403 | IP not whitelisted |
+| `forbidden` | 403 | IP not whitelisted, or CSRF session/token failure (`csrf_*` codes) |
 | `not_found` | 404 | Resource not found |
+| `rate_limited` | 429 | Too many requests (120/min per client IP; response carries a `Retry-After` header in seconds; `GET /api/health` is exempt) |
 | `conflict` | 409 | Resource already exists |
 | `instance_running` | 409 | Cannot perform action on running instance |
 | `instance_stopped` | 409 | Instance not running |
