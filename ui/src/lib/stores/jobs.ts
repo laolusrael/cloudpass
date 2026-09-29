@@ -1,6 +1,6 @@
 import { writable } from 'svelte/store';
 import type { Job } from '$lib/types';
-import { api } from '$lib/services/api';
+import { api, IPForbiddenError } from '$lib/services/api';
 import { instances } from './instances';
 import { notifications } from './notifications';
 
@@ -105,8 +105,20 @@ function createJobsStore() {
 				};
 
 				eventSource.onerror = () => {
-					console.error('SSE connection lost, stopping stream');
-					this.stopSSE();
+					// EventSource auto-retries with backoff, which hammers a
+					// denied endpoint and never surfaces the problem. Stop it,
+					// probe a whitelisted endpoint (IP denial redirects to
+					// /unauthorized via the API client), and otherwise keep
+					// the dashboard live with polling.
+					void (async () => {
+						this.stopSSE();
+						try {
+							await api.listJobs();
+						} catch (e) {
+							if (e instanceof IPForbiddenError) return;
+						}
+						this.startPolling();
+					})();
 				};
 			} catch (e) {
 				console.error('Failed to start SSE:', e);
