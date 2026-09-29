@@ -71,10 +71,68 @@ func TestConfigGet_ReturnsAllowedIPs(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "10.0.0.0/8")
 }
 
-func TestConfigClientIP_HonorsProxyHeadersWhenEnabled(t *testing.T) {
+func TestConfigUpdate_ProxySettings(t *testing.T) {
 	e := echo.New()
 	mgr := testConfigManager(t, &config.Config{
 		Security: config.SecurityConfig{EnableProxyHeader: true},
+	})
+	handler := NewConfigHandler(mgr)
+
+	body := `{"security":{"enable_proxy_header":false,"trusted_proxies":["10.0.0.5","192.168.0.0/16"]}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/config", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler.Update(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.False(t, mgr.Get().Security.EnableProxyHeader)
+	assert.Equal(t, []string{"10.0.0.5", "192.168.0.0/16"}, mgr.GetTrustedProxies())
+}
+
+func TestConfigUpdate_RejectsInvalidTrustedProxy(t *testing.T) {
+	e := echo.New()
+	mgr := testConfigManager(t, &config.Config{})
+	handler := NewConfigHandler(mgr)
+
+	body := `{"security":{"trusted_proxies":["bogus"]}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/config", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler.Update(c))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "invalid IP or CIDR")
+}
+
+func TestConfigGet_ReturnsProxySettings(t *testing.T) {
+	e := echo.New()
+	mgr := testConfigManager(t, &config.Config{
+		Security: config.SecurityConfig{
+			EnableProxyHeader: false,
+			TrustedProxies:    []string{"10.0.0.5"},
+		},
+	})
+	handler := NewConfigHandler(mgr)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler.Get(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"enable_proxy_header":false`)
+	assert.Contains(t, rec.Body.String(), "10.0.0.5")
+}
+
+func TestConfigClientIP_HonorsProxyHeadersWhenEnabled(t *testing.T) {
+	e := echo.New()
+	mgr := testConfigManager(t, &config.Config{
+		Security: config.SecurityConfig{
+			EnableProxyHeader: true,
+			TrustedProxies:    []string{"10.0.0.0/8"},
+		},
 	})
 	handler := NewConfigHandler(mgr)
 
@@ -106,4 +164,25 @@ func TestConfigClientIP_IgnoresProxyHeadersWhenDisabled(t *testing.T) {
 	require.NoError(t, handler.ClientIP(c))
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Contains(t, rec.Body.String(), `"ip":"10.0.0.5"`)
+}
+
+func TestConfigClientIP_IgnoresHeadersFromUntrustedPeer(t *testing.T) {
+	e := echo.New()
+	mgr := testConfigManager(t, &config.Config{
+		Security: config.SecurityConfig{
+			EnableProxyHeader: true,
+			TrustedProxies:    []string{"10.0.0.5"},
+		},
+	})
+	handler := NewConfigHandler(mgr)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config/client-ip", nil)
+	req.RemoteAddr = "203.0.113.7:12345"
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler.ClientIP(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"ip":"203.0.113.7"`)
 }

@@ -38,6 +38,10 @@ type SecurityConfig struct {
 	WebsocketTimeoutMin int      `yaml:"websocket_idle_timeout_minutes"`
 	CORSAllowedOrigins  []string `yaml:"cors_allowed_origins"`
 	EnableProxyHeader   bool     `yaml:"enable_proxy_header"`
+	// TrustedProxies lists CIDRs (or single IPs) whose X-Forwarded-For /
+	// X-Real-IP headers are honored. Headers from any other peer are
+	// ignored. Empty means no peer's headers are trusted.
+	TrustedProxies []string `yaml:"trusted_proxies"`
 }
 
 type MultipassConfig struct {
@@ -86,6 +90,9 @@ var defaultConfig = Config{
 		WebsocketTimeoutMin: 30,
 		CORSAllowedOrigins:  []string{},
 		EnableProxyHeader:   true,
+		// Local reverse proxies (e.g. nginx on the same host) are trusted
+		// by default; see TrustedProxies docs above.
+		TrustedProxies: []string{"127.0.0.0/8", "::1/128"},
 	},
 	Multipass: MultipassConfig{
 		SocketPath:        "",

@@ -46,6 +46,7 @@ func (m *IPWhitelistMiddleware) refreshCIDRs() {
 	m.fallbackCIDRs = nil
 	m.invalidEntries = nil
 	m.configVersion = m.cfgManager.GetVersion()
+	m.enableProxyHeader = m.cfgManager.GetEnableProxyHeader()
 
 	var invalid []string
 	for _, entry := range allowedCIDRs {
@@ -100,43 +101,11 @@ func (m *IPWhitelistMiddleware) refreshCIDRs() {
 	logger.API.Load().Warn().Msg("no allowed IPs configured, falling back to auto-detected local networks")
 }
 
-// ClientIP extracts the client IP from the request. Proxy headers
-// (X-Forwarded-For, X-Real-IP) are honored only when useProxyHeaders is
-// true; otherwise the direct peer address is returned.
-func ClientIP(c echo.Context, useProxyHeaders bool) string {
-	if useProxyHeaders {
-		xff := c.Request().Header.Get("X-Forwarded-For")
-		if xff != "" {
-			ips := strings.Split(xff, ",")
-			if len(ips) > 0 {
-				trimmed := strings.TrimSpace(ips[0])
-				if trimmed != "" {
-					return trimmed
-				}
-			}
-		}
-
-		xri := c.Request().Header.Get("X-Real-IP")
-		if xri != "" {
-			return strings.TrimSpace(xri)
-		}
-	}
-
-	// Direct peer address only. c.RealIP() is deliberately avoided here:
-	// with no IPExtractor configured Echo falls back to trusting
-	// X-Forwarded-For, which would defeat useProxyHeaders=false.
-	host, _, err := net.SplitHostPort(c.Request().RemoteAddr)
-	if err != nil {
-		if ip := net.ParseIP(c.Request().RemoteAddr); ip != nil {
-			return c.Request().RemoteAddr
-		}
-		return ""
-	}
-	return host
-}
-
 func (m *IPWhitelistMiddleware) getClientIP(c echo.Context) string {
-	return ClientIP(c, m.enableProxyHeader)
+	// Shared trust policy (see ClientIP): with headers disabled this uses
+	// the direct peer address — c.RealIP() must NOT be used here because
+	// Echo's fallback trusts X-Forwarded-For when no IPExtractor is set.
+	return ClientIP(c, m.enableProxyHeader, m.cfgManager.GetTrustedProxies())
 }
 
 func (m *IPWhitelistMiddleware) isAllowed(ip net.IP) bool {
@@ -218,9 +187,7 @@ func (m *IPWhitelistMiddleware) handleRequest(c echo.Context, next echo.HandlerF
 }
 
 func IPWhitelist(cfgManager *config.ConfigManager) echo.MiddlewareFunc {
-	enableProxyHeader := true
-
-	mw := newIPWhitelistMiddleware(cfgManager, enableProxyHeader)
+	mw := newIPWhitelistMiddleware(cfgManager, cfgManager.GetEnableProxyHeader())
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -230,9 +197,7 @@ func IPWhitelist(cfgManager *config.ConfigManager) echo.MiddlewareFunc {
 }
 
 func NewIPWhitelist(cfgManager *config.ConfigManager) echo.MiddlewareFunc {
-	enableProxyHeader := true
-
-	mw := newIPWhitelistMiddleware(cfgManager, enableProxyHeader)
+	mw := newIPWhitelistMiddleware(cfgManager, cfgManager.GetEnableProxyHeader())
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
