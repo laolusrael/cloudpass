@@ -70,3 +70,40 @@ func TestConfigGet_ReturnsAllowedIPs(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "192.168.1.100")
 	assert.Contains(t, rec.Body.String(), "10.0.0.0/8")
 }
+
+func TestConfigClientIP_HonorsProxyHeadersWhenEnabled(t *testing.T) {
+	e := echo.New()
+	mgr := testConfigManager(t, &config.Config{
+		Security: config.SecurityConfig{EnableProxyHeader: true},
+	})
+	handler := NewConfigHandler(mgr)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config/client-ip", nil)
+	req.RemoteAddr = "10.0.0.5:12345"
+	req.Header.Set("X-Forwarded-For", "192.168.1.100, 10.0.0.1")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler.ClientIP(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"ip":"192.168.1.100"`)
+}
+
+func TestConfigClientIP_IgnoresProxyHeadersWhenDisabled(t *testing.T) {
+	e := echo.New()
+	mgr := testConfigManager(t, &config.Config{
+		Security: config.SecurityConfig{EnableProxyHeader: false},
+	})
+	handler := NewConfigHandler(mgr)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config/client-ip", nil)
+	req.RemoteAddr = "10.0.0.5:12345"
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	req.Header.Set("X-Real-IP", "192.168.1.101")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler.ClientIP(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"ip":"10.0.0.5"`)
+}

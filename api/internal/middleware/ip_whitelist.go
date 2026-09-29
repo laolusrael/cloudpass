@@ -100,8 +100,11 @@ func (m *IPWhitelistMiddleware) refreshCIDRs() {
 	logger.API.Load().Warn().Msg("no allowed IPs configured, falling back to auto-detected local networks")
 }
 
-func (m *IPWhitelistMiddleware) getClientIP(c echo.Context) string {
-	if m.enableProxyHeader {
+// ClientIP extracts the client IP from the request. Proxy headers
+// (X-Forwarded-For, X-Real-IP) are honored only when useProxyHeaders is
+// true; otherwise the direct peer address is returned.
+func ClientIP(c echo.Context, useProxyHeaders bool) string {
+	if useProxyHeaders {
 		xff := c.Request().Header.Get("X-Forwarded-For")
 		if xff != "" {
 			ips := strings.Split(xff, ",")
@@ -119,7 +122,21 @@ func (m *IPWhitelistMiddleware) getClientIP(c echo.Context) string {
 		}
 	}
 
-	return c.RealIP()
+	// Direct peer address only. c.RealIP() is deliberately avoided here:
+	// with no IPExtractor configured Echo falls back to trusting
+	// X-Forwarded-For, which would defeat useProxyHeaders=false.
+	host, _, err := net.SplitHostPort(c.Request().RemoteAddr)
+	if err != nil {
+		if ip := net.ParseIP(c.Request().RemoteAddr); ip != nil {
+			return c.Request().RemoteAddr
+		}
+		return ""
+	}
+	return host
+}
+
+func (m *IPWhitelistMiddleware) getClientIP(c echo.Context) string {
+	return ClientIP(c, m.enableProxyHeader)
 }
 
 func (m *IPWhitelistMiddleware) isAllowed(ip net.IP) bool {

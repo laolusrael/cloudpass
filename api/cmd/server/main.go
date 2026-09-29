@@ -175,6 +175,7 @@ func main() {
 	api.GET("/jobs/stream", jobHandler.Stream)
 	api.GET("/config", configHandler.Get)
 	api.POST("/config", configHandler.Update)
+	api.GET("/config/client-ip", configHandler.ClientIP)
 	api.GET("/csrf/token", middleware.CSRFTokenHandler(csrfStore))
 	api.GET("/host", hostHandler.GetInfo)
 

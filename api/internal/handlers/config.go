@@ -6,6 +6,7 @@ import (
 
 	"cloudpass/internal/config"
 	"cloudpass/internal/logger"
+	"cloudpass/internal/middleware"
 	"cloudpass/internal/models"
 
 	"github.com/labstack/echo/v4"
@@ -52,6 +53,16 @@ func (h *ConfigHandler) Get(c echo.Context) error {
 			Format: cfg.Logging.Format,
 			Output: cfg.Logging.Output,
 		},
+	})
+}
+
+// ClientIP returns the caller's IP address as the server evaluates it for
+// allowlist enforcement (same proxy-header policy as the IP whitelist).
+// The settings UI uses it to warn before saving a list that would lock the
+// current admin out.
+func (h *ConfigHandler) ClientIP(c echo.Context) error {
+	return c.JSON(http.StatusOK, models.ClientIPResponse{
+		IP: middleware.ClientIP(c, h.cfgManager.GetEnableProxyHeader()),
 	})
 }
 
