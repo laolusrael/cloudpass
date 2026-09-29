@@ -184,6 +184,8 @@ export interface ConfigResponse {
 	security: {
 		allowed_ips: string[];
 		websocket_timeout_minutes: number;
+		enable_proxy_header: boolean;
+		trusted_proxies: string[];
 	};
 	multipass: {
 		socket_path: string;
@@ -209,6 +211,8 @@ export interface ConfigUpdateRequest {
 	security?: {
 		allowed_ips?: string[];
 		websocket_timeout_minutes?: number;
+		enable_proxy_header?: boolean;
+		trusted_proxies?: string[];
 	};
 	multipass?: {
 		socket_path?: string;

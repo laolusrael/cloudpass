@@ -22,6 +22,8 @@
 	let serverPort = $state(0);
 	let allowedIPs = $state('');
 	let websocketTimeout = $state(0);
+	let enableProxyHeader = $state(true);
+	let trustedProxies = $state('');
 	let socketPath = $state('');
 	let timeoutSec = $state(0);
 	let sshKeyPath = $state('');
@@ -46,6 +48,8 @@
 			serverPort = config.server.port;
 			allowedIPs = (config.security.allowed_ips ?? []).join(', ');
 			websocketTimeout = config.security.websocket_timeout_minutes;
+			enableProxyHeader = config.security.enable_proxy_header ?? true;
+			trustedProxies = (config.security.trusted_proxies ?? []).join(', ');
 			socketPath = config.multipass.socket_path;
 			timeoutSec = config.multipass.default_timeout_seconds;
 			sshKeyPath = config.multipass.ssh_key_path;
@@ -101,6 +105,11 @@
 		saving = true;
 		error = null;
 		try {
+			const proxies = trustedProxies
+				.split(',')
+				.map((ip) => ip.trim())
+				.filter((ip) => ip !== '');
+
 			const response = await api.updateConfig({
 				server: {
 					host: serverHost,
@@ -108,7 +117,9 @@
 				},
 				security: {
 					allowed_ips: ips,
-					websocket_timeout_minutes: websocketTimeout
+					websocket_timeout_minutes: websocketTimeout,
+					enable_proxy_header: enableProxyHeader,
+					trusted_proxies: proxies
 				},
 				multipass: {
 					socket_path: socketPath,
@@ -215,6 +226,39 @@
 						</p>
 						{#if ipError}
 							<p class="mt-1 text-xs text-red-600">{ipError}</p>
+						{/if}
+					</div>
+					<div class="flex items-center gap-2">
+						<input
+							id="proxy-header"
+							type="checkbox"
+							bind:checked={enableProxyHeader}
+							class="h-4 w-4 rounded border-gray-300"
+						/>
+						<label for="proxy-header" class="block text-sm font-medium text-gray-700">
+							Honor proxy headers (required behind a reverse proxy)
+						</label>
+					</div>
+					<div>
+						<label for="trusted-proxies" class="block text-sm font-medium text-gray-700 mb-1">
+							Trusted proxies (comma-separated)
+						</label>
+						<input
+							id="trusted-proxies"
+							type="text"
+							bind:value={trustedProxies}
+							class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+							placeholder="127.0.0.0/8, ::1/128"
+						/>
+						<p class="mt-1 text-xs text-gray-500">
+							Only these peers' X-Forwarded-For / X-Real-IP headers are honored. Leave empty to
+							ignore forwarded headers from everyone.
+						</p>
+						{#if enableProxyHeader && trustedProxies.trim() === ''}
+							<p class="mt-1 text-xs text-yellow-700">
+								Proxy headers are enabled but no trusted proxies are set — forwarded headers will be
+								ignored.
+							</p>
 						{/if}
 					</div>
 					<div>

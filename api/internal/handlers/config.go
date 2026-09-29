@@ -43,6 +43,8 @@ func (h *ConfigHandler) Get(c echo.Context) error {
 		Security: models.SecurityConfigResponse{
 			AllowedIPs:          cfg.Security.AllowedIPs,
 			WebsocketTimeoutMin: cfg.Security.WebsocketTimeoutMin,
+			EnableProxyHeader:   cfg.Security.EnableProxyHeader,
+			TrustedProxies:      cfg.Security.TrustedProxies,
 		},
 		Multipass: models.MultipassConfigResponse{
 			SocketPath:        cfg.Multipass.SocketPath,
@@ -62,7 +64,7 @@ func (h *ConfigHandler) Get(c echo.Context) error {
 // current admin out.
 func (h *ConfigHandler) ClientIP(c echo.Context) error {
 	return c.JSON(http.StatusOK, models.ClientIPResponse{
-		IP: middleware.ClientIP(c, h.cfgManager.GetEnableProxyHeader()),
+		IP: middleware.ClientIP(c, h.cfgManager.GetEnableProxyHeader(), h.cfgManager.GetTrustedProxies()),
 	})
 }
 
@@ -115,6 +117,22 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 		}
 		if req.Security.WebsocketTimeoutMin > 0 {
 			cfg.Security.WebsocketTimeoutMin = req.Security.WebsocketTimeoutMin
+			modified = true
+		}
+		if req.Security.EnableProxyHeader != nil {
+			cfg.Security.EnableProxyHeader = *req.Security.EnableProxyHeader
+			modified = true
+		}
+		if req.Security.TrustedProxies != nil {
+			for _, ip := range req.Security.TrustedProxies {
+				if err := validateAllowedIP(ip); err != nil {
+					return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+						Error:   "invalid_request",
+						Message: "invalid IP or CIDR format: " + ip,
+					})
+				}
+			}
+			cfg.Security.TrustedProxies = req.Security.TrustedProxies
 			modified = true
 		}
 	}

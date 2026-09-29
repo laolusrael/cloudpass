@@ -611,33 +611,36 @@ User (Browser)                    API Server                    Multipass
 
 ### 6.1 IP Whitelist Middleware
 
-```go
-func IPWhitelist(allowedCIDRs []string) echo.MiddlewareFunc {
-    return func(next echo.HandlerFunc) echo.HandlerFunc {
-        return func(c echo.Context) error {
-            clientIP := c.RealIP()
-            
-            // Check against allowed CIDRs
-            allowed := false
-            for _, cidr := range allowedCIDRs {
-                if _, ipnet, _ := net.ParseCIDR(cidr); ipnet != nil {
-                    if ipnet.Contains(net.ParseIP(clientIP)) {
-                        allowed = true
-                        break
-                    }
-                }
-            }
-            
-            if !allowed {
-                return echo.NewHTTPError(http.StatusForbidden, 
-                    "Access denied")
-            }
-            
-            return next(c)
-        }
-    }
-}
+`allowed_ips` entries accept CIDR notation (`192.168.1.0/24`) or single IP
+addresses (`192.168.1.100`, normalized to `/32` / `/128`). An empty list
+falls back to auto-detected local networks; a non-empty list with zero valid
+entries denies all requests (fail-closed).
+
+### 6.1.1 Proxy Headers and Trusted Proxies
+
+`X-Forwarded-For` / `X-Real-IP` are honored **only** when both conditions hold:
+
+1. `security.enable_proxy_header` is `true`, and
+2. the direct TCP peer is listed in `security.trusted_proxies`
+   (default: loopback `127.0.0.0/8`, `::1/128` — covers nginx on the same host).
+
+Otherwise the direct peer address is enforced. This applies uniformly via
+`e.IPExtractor`, so the whitelist, rate limiter, and request logs all see the
+same client IP. Headers from untrusted peers are ignored; an empty
+`trusted_proxies` list trusts nobody.
+
+```yaml
+security:
+  enable_proxy_header: true
+  trusted_proxies:
+    - "127.0.0.0/8"
+    - "::1/128"
 ```
+
+When deploying behind the nginx reverse proxy in §10.2 (same host), the
+defaults are correct as-is. For a proxy on another host, add its IP/CIDR to
+`trusted_proxies`. For direct exposure without any proxy, set
+`enable_proxy_header: false` to ignore client-supplied headers entirely.
 
 ### 6.2 Input Validation
 

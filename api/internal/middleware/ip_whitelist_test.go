@@ -479,3 +479,70 @@ func TestIPWhitelist_HotReloadSingleIP(t *testing.T) {
 	assert.Equal(t, http.StatusOK, allowed("10.9.9.9:12345"))
 	assert.Equal(t, http.StatusForbidden, allowed("10.9.9.10:12345"))
 }
+
+func TestIPWhitelist_ProxyHeadersDisabledIgnoresSpoof(t *testing.T) {
+	e := echo.New()
+
+	cfg := &config.Config{
+		Security: config.SecurityConfig{
+			AllowedIPs:        []string{"192.168.1.0/24"},
+			EnableProxyHeader: false,
+		},
+	}
+	cfgManager := config.NewConfigManager(cfg, "")
+
+	handler := IPWhitelist(cfgManager)(func(c echo.Context) error {
+		return c.String(http.StatusOK, "allowed")
+	})
+
+	// Spoofed header matches the allowlist, but headers are disabled: the
+	// direct (denied) peer address must win.
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	req.RemoteAddr = "203.0.113.7:12345"
+	req.Header.Set("X-Forwarded-For", "192.168.1.100")
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	assert.NoError(t, handler(c))
+	assert.Equal(t, http.StatusForbidden, rec.Code)
+}
+
+func TestIPWhitelist_ProxyHeaderFlagHotReload(t *testing.T) {
+	e := echo.New()
+
+	cfg := &config.Config{
+		Security: config.SecurityConfig{
+			AllowedIPs:        []string{"192.168.1.0/24"},
+			EnableProxyHeader: true,
+			TrustedProxies:    []string{"203.0.113.7"},
+		},
+	}
+	cfgManager := config.NewConfigManager(cfg, filepath.Join(t.TempDir(), "config.yaml"))
+
+	handler := IPWhitelist(cfgManager)(func(c echo.Context) error {
+		return c.String(http.StatusOK, "allowed")
+	})
+
+	check := func() int {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		req.RemoteAddr = "203.0.113.7:12345"
+		req.Header.Set("X-Forwarded-For", "192.168.1.100")
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		if err := handler(c); err != nil {
+			if httpError, ok := err.(*echo.HTTPError); ok {
+				rec.Code = httpError.Code
+			}
+		}
+		return rec.Code
+	}
+
+	assert.Equal(t, http.StatusOK, check())
+
+	cfg.Security.EnableProxyHeader = false
+	if err := cfgManager.Update(cfg); err != nil {
+		t.Fatalf("failed to update config: %v", err)
+	}
+
+	assert.Equal(t, http.StatusForbidden, check())
+}

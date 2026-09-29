@@ -177,6 +177,8 @@ type ServerConfigResponse struct {
 type SecurityConfigResponse struct {
 	AllowedIPs          []string `json:"allowed_ips"`
 	WebsocketTimeoutMin int      `json:"websocket_timeout_minutes"`
+	EnableProxyHeader   bool     `json:"enable_proxy_header"`
+	TrustedProxies      []string `json:"trusted_proxies"`
 }
 
 type ClientIPResponse struct {
@@ -216,6 +218,8 @@ type ServerUpdateRequest struct {
 type SecurityUpdateRequest struct {
 	AllowedIPs          []string `json:"allowed_ips,omitempty"`
 	WebsocketTimeoutMin int      `json:"websocket_timeout_minutes,omitempty"`
+	EnableProxyHeader   *bool    `json:"enable_proxy_header,omitempty"`
+	TrustedProxies      []string `json:"trusted_proxies,omitempty"`
 }
 
 type MultipassUpdateRequest struct {

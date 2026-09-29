@@ -207,3 +207,13 @@ func (m *ConfigManager) GetEnableProxyHeader() bool {
 
 	return m.cfg.Security.EnableProxyHeader
 }
+
+// GetTrustedProxies returns the CIDRs whose proxy headers are honored.
+func (m *ConfigManager) GetTrustedProxies() []string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	proxies := make([]string, len(m.cfg.Security.TrustedProxies))
+	copy(proxies, m.cfg.Security.TrustedProxies)
+	return proxies
+}

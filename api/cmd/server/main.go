@@ -119,6 +119,11 @@ func main() {
 	e.HideBanner = true
 	e.HidePort = true
 
+	// Client-IP extraction honors proxy headers only from trusted proxies
+	// (see security.trusted_proxies). This makes c.RealIP() trustworthy for
+	// the whitelist, rate limiter, and logging alike.
+	e.IPExtractor = middleware.IPExtractorForConfig(cfgManager)
+
 	csrfStore := middleware.NewCSRFStore()
 
 	e.Use(echoMiddleware.Recover())
