@@ -16,6 +16,9 @@ type JobStorage struct {
 	filePath string
 	mu       sync.RWMutex
 	jobs     map[string]*models.Job
+	// idempotency maps an Idempotency-Key header value to the job it
+	// created. Rebuilt on load; entries die with their job.
+	idempotency map[string]string
 }
 
 func NewJobStorage(dataDir string) (*JobStorage, error) {
@@ -25,8 +28,9 @@ func NewJobStorage(dataDir string) (*JobStorage, error) {
 
 	filePath := filepath.Join(dataDir, "jobs.json")
 	storage := &JobStorage{
-		filePath: filePath,
-		jobs:     make(map[string]*models.Job),
+		filePath:    filePath,
+		jobs:        make(map[string]*models.Job),
+		idempotency: make(map[string]string),
 	}
 
 	if err := storage.load(); err != nil {
@@ -54,6 +58,9 @@ func (s *JobStorage) load() error {
 	defer s.mu.Unlock()
 	for _, job := range jobs {
 		s.jobs[job.ID] = job
+		if job.IdempotencyKey != "" {
+			s.idempotency[job.IdempotencyKey] = job.ID
+		}
 	}
 
 	logger.API.Load().Info().Int("count", len(s.jobs)).Msg("loaded jobs from storage")
@@ -106,6 +113,9 @@ func (s *JobStorage) List() []*models.Job {
 func (s *JobStorage) Set(job *models.Job) {
 	s.mu.Lock()
 	s.jobs[job.ID] = job
+	if job.IdempotencyKey != "" {
+		s.idempotency[job.IdempotencyKey] = job.ID
+	}
 	s.mu.Unlock()
 
 	if err := s.save(); err != nil {
@@ -115,12 +125,30 @@ func (s *JobStorage) Set(job *models.Job) {
 
 func (s *JobStorage) Delete(id string) {
 	s.mu.Lock()
+	if job, ok := s.jobs[id]; ok && job.IdempotencyKey != "" {
+		if mapped, ok := s.idempotency[job.IdempotencyKey]; ok && mapped == id {
+			delete(s.idempotency, job.IdempotencyKey)
+		}
+	}
 	delete(s.jobs, id)
 	s.mu.Unlock()
 
 	if err := s.save(); err != nil {
 		logger.API.Load().Error().Err(err).Str("job_id", id).Msg("failed to delete job")
 	}
+}
+
+// GetByIdempotencyKey returns the job previously created with the given
+// Idempotency-Key header value, if it still exists.
+func (s *JobStorage) GetByIdempotencyKey(key string) (*models.Job, bool) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	id, ok := s.idempotency[key]
+	if !ok {
+		return nil, false
+	}
+	job, ok := s.jobs[id]
+	return job, ok
 }
 
 func (s *JobStorage) Cleanup(maxAge time.Duration) int {
@@ -133,6 +161,11 @@ func (s *JobStorage) Cleanup(maxAge time.Duration) int {
 		if job.Status == models.JobStatusCompleted || job.Status == models.JobStatusFailed {
 			if job.UpdatedAt.Before(cutoff) {
 				delete(s.jobs, id)
+				if job.IdempotencyKey != "" {
+					if mapped, ok := s.idempotency[job.IdempotencyKey]; ok && mapped == id {
+						delete(s.idempotency, job.IdempotencyKey)
+					}
+				}
 				deleted++
 			}
 		}

@@ -12,13 +12,14 @@ const (
 )
 
 type Job struct {
-	ID           string    `json:"id"`
-	Type         string    `json:"type"`
-	Status       JobStatus `json:"status"`
-	InstanceName string    `json:"instance_name,omitempty"`
-	Error        string    `json:"error,omitempty"`
-	CreatedAt    time.Time `json:"created_at"`
-	UpdatedAt    time.Time `json:"updated_at"`
+	ID             string    `json:"id"`
+	Type           string    `json:"type"`
+	Status         JobStatus `json:"status"`
+	InstanceName   string    `json:"instance_name,omitempty"`
+	Error          string    `json:"error,omitempty"`
+	IdempotencyKey string    `json:"idempotency_key,omitempty"`
+	CreatedAt      time.Time `json:"created_at"`
+	UpdatedAt      time.Time `json:"updated_at"`
 }
 
 type CreateJobRequest struct {
