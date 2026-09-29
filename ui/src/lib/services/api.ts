@@ -17,6 +17,7 @@ import type {
 	UploadResponse,
 	ConfigResponse,
 	ConfigUpdateRequest,
+	ClientIPResponse,
 	Job,
 	JobResponse,
 	JobListResponse,
@@ -339,6 +340,16 @@ class ApiService {
 			method: 'POST',
 			body: JSON.stringify(request)
 		});
+	}
+
+	/**
+	 * Returns this client's IP address as the server evaluates it for
+	 * allowlist enforcement. Used to warn before saving a list that would
+	 * lock the current admin out.
+	 */
+	async getClientIP(): Promise<string> {
+		const data = await this.request<ClientIPResponse>('/config/client-ip');
+		return data.ip;
 	}
 
 	async getHostInfo(): Promise<HostInfo> {

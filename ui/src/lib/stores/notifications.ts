@@ -28,6 +28,9 @@ function createNotificationsStore() {
 		info(message: string) {
 			this.show(message, 'info');
 		},
+		warning(message: string) {
+			this.show(message, 'info');
+		},
 		remove(id: number) {
 			update((n) => n.filter((item) => item.id !== id));
 		}

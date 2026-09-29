@@ -179,6 +179,10 @@ type SecurityConfigResponse struct {
 	WebsocketTimeoutMin int      `json:"websocket_timeout_minutes"`
 }
 
+type ClientIPResponse struct {
+	IP string `json:"ip"`
+}
+
 type MultipassConfigResponse struct {
 	SocketPath        string `json:"socket_path"`
 	DefaultTimeoutSec int    `json:"default_timeout_seconds"`

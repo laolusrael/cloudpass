@@ -242,3 +242,7 @@ export interface UpdateResourcesRequest {
 	memory: string;
 	disk: string;
 }
+
+export interface ClientIPResponse {
+	ip: string;
+}

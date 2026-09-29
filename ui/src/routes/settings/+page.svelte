@@ -3,14 +3,20 @@
 	import { api } from '$lib/services/api';
 	import { notifications } from '$lib/stores/notifications';
 	import type { ConfigResponse } from '$lib/types';
+	import { decideSave } from '$lib/validation/ip';
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
+	import Modal from '$lib/components/Modal.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
 
 	let config = $state<ConfigResponse | null>(null);
 	let loading = $state(true);
 	let saving = $state(false);
 	let error = $state<string | null>(null);
+	let ipError = $state<string | null>(null);
+	let clientIp = $state('');
+	let confirmOpen = $state(false);
+	let confirmMessage = $state('');
 
 	let serverHost = $state('');
 	let serverPort = $state(0);
@@ -23,14 +29,22 @@
 	let logFormat = $state('');
 	let logOutput = $state('');
 
+	function parseIpField(): string[] {
+		return allowedIPs
+			.split(',')
+			.map((ip) => ip.trim())
+			.filter((ip) => ip !== '');
+	}
+
 	async function loadConfig() {
 		loading = true;
 		error = null;
+		ipError = null;
 		try {
 			config = await api.getConfig();
 			serverHost = config.server.host;
 			serverPort = config.server.port;
-			allowedIPs = config.security.allowed_ips.join(', ');
+			allowedIPs = (config.security.allowed_ips ?? []).join(', ');
 			websocketTimeout = config.security.websocket_timeout_minutes;
 			socketPath = config.multipass.socket_path;
 			timeoutSec = config.multipass.default_timeout_seconds;
@@ -43,6 +57,12 @@
 		} finally {
 			loading = false;
 		}
+		try {
+			clientIp = await api.getClientIP();
+		} catch {
+			// Self-lockout guard is best-effort: saving still works.
+			clientIp = '';
+		}
 	}
 
 	onMount(() => {
@@ -50,14 +70,37 @@
 	});
 
 	async function handleSave() {
+		error = null;
+		ipError = null;
+
+		const ips = parseIpField();
+		const decision = decideSave(ips, clientIp);
+		if (decision.action === 'block') {
+			ipError = decision.error;
+			return;
+		}
+		if (decision.action === 'confirm') {
+			confirmMessage = decision.message;
+			confirmOpen = true;
+			return;
+		}
+
+		await doSave(ips);
+	}
+
+	async function confirmSave() {
+		confirmOpen = false;
+		await doSave(parseIpField());
+	}
+
+	function cancelSave() {
+		confirmOpen = false;
+	}
+
+	async function doSave(ips: string[]) {
 		saving = true;
 		error = null;
 		try {
-			const ips = allowedIPs
-				.split(',')
-				.map((ip) => ip.trim())
-				.filter((ip) => ip !== '');
-
 			const response = await api.updateConfig({
 				server: {
 					host: serverHost,
@@ -170,6 +213,9 @@
 							Comma-separated CIDR ranges or single IP addresses (e.g. 192.168.1.0/24,
 							192.168.1.100). Leave empty to auto-detect local networks.
 						</p>
+						{#if ipError}
+							<p class="mt-1 text-xs text-red-600">{ipError}</p>
+						{/if}
 					</div>
 					<div>
 						<label for="ws-timeout" class="block text-sm font-medium text-gray-700 mb-1">
@@ -279,4 +325,12 @@
 			</Card>
 		</div>
 	{/if}
+
+	<Modal open={confirmOpen} title="Confirm allowlist change" size="sm" onclose={cancelSave}>
+		<p class="text-sm text-gray-700">{confirmMessage}</p>
+		{#snippet footer()}
+			<Button variant="secondary" onclick={cancelSave} disabled={saving}>Cancel</Button>
+			<Button variant="danger" onclick={confirmSave} disabled={saving}>Save anyway</Button>
+		{/snippet}
+	</Modal>
 </div>
