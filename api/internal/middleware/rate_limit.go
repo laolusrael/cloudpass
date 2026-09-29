@@ -2,9 +2,11 @@ package middleware
 
 import (
 	"net/http"
+	"strconv"
 	"sync"
 	"time"
 
+	"cloudpass/internal/logger"
 	"cloudpass/internal/models"
 
 	"github.com/labstack/echo/v4"
@@ -107,11 +109,24 @@ func (rl *rateLimiter) allow(ip string) bool {
 
 func RateLimit() echo.MiddlewareFunc {
 	rl := newRateLimiter(defaultRateLimit, defaultRateLimitWindow)
+	retryAfter := strconv.Itoa(int(defaultRateLimitWindow / time.Second))
 
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
+			// Liveness probes must never consume user budget.
+			if c.Request().URL.Path == "/api/health" &&
+				(c.Request().Method == http.MethodGet || c.Request().Method == http.MethodHead) {
+				return next(c)
+			}
+
 			ip := c.RealIP()
 			if !rl.allow(ip) {
+				logger.API.Load().Warn().
+					Str("ip", ip).
+					Str("method", c.Request().Method).
+					Str("path", c.Request().URL.Path).
+					Msg("rate limit exceeded")
+				c.Response().Header().Set("Retry-After", retryAfter)
 				return c.JSON(http.StatusTooManyRequests, models.ErrorResponse{
 					Error:   "rate_limited",
 					Message: "Too many requests. Please try again later.",

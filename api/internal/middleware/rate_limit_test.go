@@ -55,3 +55,49 @@ func TestRateLimit_MiddlewareBlocks(t *testing.T) {
 	assert.NoError(t, err)
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
+
+func TestRateLimit_SetsRetryAfterHeader(t *testing.T) {
+	e := echo.New()
+	middleware := RateLimit()
+
+	handler := middleware(func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	var lastRec *httptest.ResponseRecorder
+	for i := 0; i < defaultRateLimit+1; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/", nil)
+		lastRec = httptest.NewRecorder()
+		c := e.NewContext(req, lastRec)
+		assert.NoError(t, handler(c))
+	}
+
+	assert.Equal(t, http.StatusTooManyRequests, lastRec.Code)
+	assert.Equal(t, "60", lastRec.Header().Get("Retry-After"))
+	assert.Contains(t, lastRec.Body.String(), "rate_limited")
+}
+
+func TestRateLimit_HealthExempt(t *testing.T) {
+	e := echo.New()
+	middleware := RateLimit()
+
+	handler := middleware(func(c echo.Context) error {
+		return c.String(http.StatusOK, "ok")
+	})
+
+	// Far beyond the limit: health probes must never be rejected.
+	for i := 0; i < defaultRateLimit+10; i++ {
+		req := httptest.NewRequest(http.MethodGet, "/api/health", nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		assert.NoError(t, handler(c))
+		assert.Equal(t, http.StatusOK, rec.Code)
+	}
+
+	// HEAD probes are exempt as well.
+	req := httptest.NewRequest(http.MethodHead, "/api/health", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	assert.NoError(t, handler(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+}
