@@ -1,5 +1,6 @@
 <script lang="ts">
-	import { instances } from '$lib/stores/instances';
+	import { onDestroy } from 'svelte';
+	import { instances, CreateCancelledError } from '$lib/stores/instances';
 	import { notifications } from '$lib/stores/notifications';
 	import { goto } from '$app/navigation';
 	import type { CreateInstanceRequest } from '$lib/types';
@@ -9,6 +10,11 @@
 	let loading = $state(false);
 	let error = $state<string | null>(null);
 	let status = $state<string | null>(null);
+
+	// A superseded create must not keep polling after we leave.
+	onDestroy(() => {
+		instances.cancelCreate();
+	});
 
 	async function handleSubmit(data: CreateInstanceRequest) {
 		loading = true;
@@ -26,6 +32,9 @@
 			notifications.success(`Instance "${data.name || 'new instance'}" created successfully`);
 			goto('/');
 		} catch (e) {
+			if (e instanceof CreateCancelledError) {
+				return;
+			}
 			error = e instanceof Error ? e.message : 'Failed to create instance';
 			notifications.error(error);
 		} finally {

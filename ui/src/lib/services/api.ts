@@ -46,6 +46,31 @@ export class CSRFExpiredError extends Error {
 	}
 }
 
+/** Server asked us to slow down. Carries the Retry-After delay in ms. */
+export class RateLimitedError extends Error {
+	retryAfterMs: number;
+
+	constructor(retryAfterMs: number, message = 'Too many requests. Please try again later.') {
+		super(message);
+		this.name = 'RateLimitedError';
+		this.retryAfterMs = retryAfterMs;
+	}
+}
+
+/** Fallback wait when a 429 carries no (or an unparsable) Retry-After header. */
+const DEFAULT_RETRY_AFTER_MS = 5000;
+
+function parseRetryAfterMs(response: Response): number {
+	const raw = response.headers.get('Retry-After');
+	if (raw !== null) {
+		const seconds = Number(raw);
+		if (Number.isFinite(seconds) && seconds >= 0) {
+			return seconds * 1000;
+		}
+	}
+	return DEFAULT_RETRY_AFTER_MS;
+}
+
 class ApiService {
 	private csrfToken: string | null = null;
 
@@ -100,6 +125,10 @@ class ApiService {
 			throw err;
 		}
 
+		if (response.status === 429) {
+			throw new RateLimitedError(parseRetryAfterMs(response));
+		}
+
 		if (!response.ok) {
 			const error: ErrorResponse = await response.json();
 			throw new Error(error.message || 'An error occurred');
@@ -137,8 +166,8 @@ class ApiService {
 		return data.instances;
 	}
 
-	async getInstance(name: string): Promise<Instance> {
-		return this.request<Instance>(`/instances/${encodeURIComponent(name)}`);
+	async getInstance(name: string, signal?: AbortSignal): Promise<Instance> {
+		return this.request<Instance>(`/instances/${encodeURIComponent(name)}`, { signal });
 	}
 
 	async getInstanceState(name: string): Promise<InstanceState> {
@@ -152,16 +181,25 @@ class ApiService {
 		});
 	}
 
-	async createInstanceAsync(request: CreateInstanceRequest): Promise<Job> {
+	async createInstanceAsync(
+		request: CreateInstanceRequest,
+		options: { idempotencyKey?: string; signal?: AbortSignal } = {}
+	): Promise<Job> {
+		const headers: Record<string, string> = {};
+		if (options.idempotencyKey) {
+			headers['Idempotency-Key'] = options.idempotencyKey;
+		}
 		const data = await this.request<JobResponse>('/instances/async', {
 			method: 'POST',
-			body: JSON.stringify(request)
+			body: JSON.stringify(request),
+			headers,
+			signal: options.signal
 		});
 		return data.job;
 	}
 
-	async getJob(id: string): Promise<Job> {
-		const data = await this.request<JobResponse>(`/jobs/${id}`);
+	async getJob(id: string, signal?: AbortSignal): Promise<Job> {
+		const data = await this.request<JobResponse>(`/jobs/${id}`, { signal });
 		return data.job;
 	}
 
