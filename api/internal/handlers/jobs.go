@@ -7,18 +7,50 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net/http"
+	"regexp"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/labstack/echo/v4"
 )
+
+// IdempotencyKeyHeader carries a client-generated key that makes async
+// creation safe to retry: replays with the same key return the original job
+// instead of launching a duplicate instance.
+const IdempotencyKeyHeader = "Idempotency-Key"
+
+const (
+	maxIdempotencyKeyLen = 128
+)
+
+var idempotencyKeyRegex = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+var (
+	errIdempotencyKeyLength  = errors.New("idempotency key must be 1-128 characters")
+	errIdempotencyKeyCharset = errors.New("idempotency key must match [A-Za-z0-9_-]+")
+)
+
+func validateIdempotencyKey(key string) error {
+	if len(key) == 0 || len(key) > maxIdempotencyKeyLen {
+		return errIdempotencyKeyLength
+	}
+	if !idempotencyKeyRegex.MatchString(key) {
+		return errIdempotencyKeyCharset
+	}
+	return nil
+}
 
 type JobHandler struct {
 	storage  *JobStorage
 	eventHub *EventHub
 	mpClient multipass.Client
 	timeout  time.Duration
+	// idempotencyMu serializes same-key creates so concurrent replays
+	// collapse onto a single job instead of racing check-then-create.
+	idempotencyMu sync.Mutex
 }
 
 func generateJobID() string {
@@ -158,6 +190,25 @@ func (h *JobHandler) CreateInstanceAsync(c echo.Context) error {
 		}
 	}
 
+	idempotencyKey := strings.TrimSpace(c.Request().Header.Get(IdempotencyKeyHeader))
+	if idempotencyKey != "" {
+		if err := validateIdempotencyKey(idempotencyKey); err != nil {
+			logger.API.Load().Warn().Err(err).Str("ip", c.RealIP()).Msg("invalid idempotency key")
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: err.Error(),
+			})
+		}
+
+		h.idempotencyMu.Lock()
+		defer h.idempotencyMu.Unlock()
+
+		if existing, ok := h.storage.GetByIdempotencyKey(idempotencyKey); ok {
+			logger.API.Load().Info().Str("job_id", existing.ID).Str("key", idempotencyKey).Msg("idempotent replay: returning existing job")
+			return c.JSON(http.StatusOK, models.JobResponse{Job: existing})
+		}
+	}
+
 	jobID := generateJobID()
 	instanceName := req.Name
 	if instanceName == "" {
@@ -165,12 +216,13 @@ func (h *JobHandler) CreateInstanceAsync(c echo.Context) error {
 	}
 
 	job := &models.Job{
-		ID:           jobID,
-		Type:         "create_instance",
-		Status:       models.JobStatusPending,
-		InstanceName: instanceName,
-		CreatedAt:    time.Now(),
-		UpdatedAt:    time.Now(),
+		ID:             jobID,
+		Type:           "create_instance",
+		Status:         models.JobStatusPending,
+		InstanceName:   instanceName,
+		IdempotencyKey: idempotencyKey,
+		CreatedAt:      time.Now(),
+		UpdatedAt:      time.Now(),
 	}
 
 	h.storage.Set(job)
