@@ -214,7 +214,8 @@ http://localhost:8080/api
 
 Directory components are stripped from the client file name. The instance must be
 `Running` (`instance_not_running` otherwise). Parent directories are created on
-the guest before transfer.
+the guest before transfer. Uploading to an existing guest path overwrites it
+without confirmation (last-write-wins).
 
 Success: `201 {"message": "File uploaded", "path": "<guest path>"}`.
 Errors: `invalid_request` (400), `file_too_large` (400), `instance_not_running`

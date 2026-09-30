@@ -1,7 +1,6 @@
 package handlers
 
 import (
-	"errors"
 	"net/http"
 	"strings"
 
@@ -29,27 +28,6 @@ func validateAllowedIP(entry string) error {
 func validatePort(port int) error {
 	if port < 1 || port > 65535 {
 		return http.ErrNoCookie
-	}
-	return nil
-}
-
-// validateUploadDefaultPath checks a guest-absolute POSIX path for use as the
-// upload default directory. The guest is always Linux, so this intentionally
-// uses slash semantics even when the server runs on Windows.
-func validateUploadDefaultPath(path string) error {
-	if path == "" {
-		return errors.New("default_path is required")
-	}
-	if !strings.HasPrefix(path, "/") {
-		return errors.New("default_path must be an absolute path")
-	}
-	if strings.ContainsRune(path, '\x00') {
-		return errors.New("default_path contains invalid characters")
-	}
-	for _, seg := range strings.Split(path, "/") {
-		if seg == ".." {
-			return errors.New("default_path must not contain '..'")
-		}
 	}
 	return nil
 }
@@ -180,24 +158,23 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 	}
 
 	if req.Upload != nil {
+		maxMB := cfg.Upload.MaxFileSizeMB
+		defPath := cfg.Upload.DefaultPath
 		if req.Upload.MaxFileSizeMB != nil {
-			if *req.Upload.MaxFileSizeMB < 1 || *req.Upload.MaxFileSizeMB > 1024 {
-				return c.JSON(http.StatusBadRequest, models.ErrorResponse{
-					Error:   "invalid_request",
-					Message: "max_file_size_mb must be between 1 and 1024",
-				})
-			}
-			cfg.Upload.MaxFileSizeMB = *req.Upload.MaxFileSizeMB
-			modified = true
+			maxMB = *req.Upload.MaxFileSizeMB
 		}
 		if req.Upload.DefaultPath != "" {
-			if err := validateUploadDefaultPath(req.Upload.DefaultPath); err != nil {
-				return c.JSON(http.StatusBadRequest, models.ErrorResponse{
-					Error:   "invalid_request",
-					Message: err.Error(),
-				})
-			}
-			cfg.Upload.DefaultPath = req.Upload.DefaultPath
+			defPath = req.Upload.DefaultPath
+		}
+		if err := config.ValidateUploadSettings(maxMB, defPath); err != nil {
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: err.Error(),
+			})
+		}
+		if maxMB != cfg.Upload.MaxFileSizeMB || defPath != cfg.Upload.DefaultPath {
+			cfg.Upload.MaxFileSizeMB = maxMB
+			cfg.Upload.DefaultPath = defPath
 			modified = true
 		}
 	}

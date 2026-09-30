@@ -176,3 +176,49 @@ security:
 
 	assert.Equal(t, []string{"10.0.0.0/8", "172.16.0.0/12"}, cfg.Security.AllowedIPs)
 }
+
+func TestLoad_NormalizesInvalidUploadSettings(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := `
+upload:
+  max_file_size_mb: 0
+  default_path: "relative/uploads"
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	assert.Equal(t, 100, cfg.Upload.MaxFileSizeMB)
+	assert.Equal(t, "/home/ubuntu/uploads", cfg.Upload.DefaultPath)
+}
+
+func TestLoad_PreservesValidUploadSettings(t *testing.T) {
+	tmpDir := t.TempDir()
+	configPath := filepath.Join(tmpDir, "config.yaml")
+
+	configContent := `
+upload:
+  max_file_size_mb: 50
+  default_path: "/custom/uploads"
+`
+	require.NoError(t, os.WriteFile(configPath, []byte(configContent), 0644))
+
+	cfg, err := Load(configPath)
+	require.NoError(t, err)
+
+	assert.Equal(t, 50, cfg.Upload.MaxFileSizeMB)
+	assert.Equal(t, "/custom/uploads", cfg.Upload.DefaultPath)
+}
+
+func TestValidateUploadSettings(t *testing.T) {
+	assert.NoError(t, ValidateUploadSettings(100, "/home/ubuntu/uploads"))
+	assert.NoError(t, ValidateUploadSettings(1, "/"))
+	assert.ErrorContains(t, ValidateUploadSettings(0, "/x"), "max_file_size_mb")
+	assert.ErrorContains(t, ValidateUploadSettings(1025, "/x"), "max_file_size_mb")
+	assert.ErrorContains(t, ValidateUploadSettings(100, "relative"), "absolute")
+	assert.ErrorContains(t, ValidateUploadSettings(100, "/a/../b"), "'..'")
+	assert.ErrorContains(t, ValidateUploadSettings(100, ""), "required")
+}

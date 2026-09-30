@@ -89,9 +89,7 @@
 						<div class="flex items-center gap-3">
 							<Spinner size="sm" />
 							<span class="text-sm font-medium text-gray-900">{job.instance_name || job.id}</span>
-							<Badge type={job.status === 'pending' ? 'info' : 'warning'}>
-								{job.status}
-							</Badge>
+							<Badge state={job.status} />
 						</div>
 						<span class="text-xs text-gray-500">
 							Started {new Date(job.created_at).toLocaleTimeString()}

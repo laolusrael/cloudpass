@@ -1,35 +1,37 @@
-<script lang="ts">
+<script lang="ts" generics="T extends object">
+	/* eslint-disable no-undef -- T is declared by the Svelte generics attribute, which this ESLint version cannot see. svelte-check validates the types instead. */
 	import type { Snippet } from 'svelte';
 
-	interface Column {
-		key: string;
+	interface Column<T extends object> {
+		key: Extract<keyof T, string>;
 		header: string;
 		sortable?: boolean;
-		render?: (item: Record<string, unknown>) => string;
+		render?: (item: T) => string;
 	}
 
-	interface Props {
-		data: Record<string, unknown>[];
-		columns: Column[];
+	interface Props<T extends object> {
+		data: T[];
+		columns: Column<T>[];
 		pageSize?: number;
 		pageSizes?: number[];
-		actions?: Snippet<[Record<string, unknown>]>;
+		actions?: Snippet<[T]>;
 	}
 
-	let { data, columns, pageSizes = [10, 25, 50], actions }: Props = $props();
+	let { data, columns, pageSizes = [10, 25, 50], actions }: Props<T> = $props();
 
 	let currentPage = $state(1);
-	let sortKey = $state<string | null>(null);
+	let sortKey = $state<Extract<keyof T, string> | null>(null);
 	let sortDir = $state<'asc' | 'desc'>('asc');
 	let effectivePageSize = $state(10);
 
 	const totalPages = $derived(Math.ceil(data.length / effectivePageSize));
 
 	const sortedData = $derived.by(() => {
-		if (!sortKey) return data;
+		const key = sortKey;
+		if (!key) return data;
 		return [...data].sort((a, b) => {
-			const aVal = a[sortKey!];
-			const bVal = b[sortKey!];
+			const aVal: unknown = a[key];
+			const bVal: unknown = b[key];
 			if (aVal === bVal) return 0;
 			if (aVal === null || aVal === undefined) return 1;
 			if (bVal === null || bVal === undefined) return -1;
@@ -42,7 +44,7 @@
 		sortedData.slice((currentPage - 1) * effectivePageSize, currentPage * effectivePageSize)
 	);
 
-	function handleSort(key: string) {
+	function handleSort(key: Extract<keyof T, string>) {
 		if (sortKey === key) {
 			sortDir = sortDir === 'asc' ? 'desc' : 'asc';
 		} else {

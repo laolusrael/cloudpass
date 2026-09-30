@@ -15,7 +15,7 @@ describe('Terminal WebSocket Message Handling', () => {
 	});
 
 	it('should correctly identify text data', () => {
-		const textData = 'hello world';
+		const textData: unknown = 'hello world';
 		expect(textData instanceof Blob).toBe(false);
 	});
 

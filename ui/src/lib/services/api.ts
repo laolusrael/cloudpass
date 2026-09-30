@@ -3,7 +3,7 @@ import type {
 	CreateInstanceRequest,
 	InstanceList,
 	InstanceResponse,
-	InstanceState,
+	InstanceStateResponse,
 	ImageList,
 	NetworkList,
 	ErrorResponse,
@@ -60,10 +60,9 @@ export class RateLimitedError extends Error {
 /** Fallback wait when a 429 carries no (or an unparsable) Retry-After header. */
 const DEFAULT_RETRY_AFTER_MS = 5000;
 
-function parseRetryAfterMs(response: Response): number {
-	const raw = response.headers.get('Retry-After');
-	if (raw !== null) {
-		const seconds = Number(raw);
+function parseRetryAfterMs(retryAfter: string | null): number {
+	if (retryAfter !== null) {
+		const seconds = Number(retryAfter);
 		if (Number.isFinite(seconds) && seconds >= 0) {
 			return seconds * 1000;
 		}
@@ -97,9 +96,21 @@ class ApiService {
 		const isMutating = ['POST', 'PUT', 'DELETE', 'PATCH'].includes(method);
 
 		const headers: Record<string, string> = {
-			'Content-Type': 'application/json',
-			...options.headers
+			'Content-Type': 'application/json'
 		};
+		if (options.headers) {
+			if (options.headers instanceof Headers) {
+				options.headers.forEach((value, key) => {
+					headers[key] = value;
+				});
+			} else if (Array.isArray(options.headers)) {
+				for (const [key, value] of options.headers) {
+					headers[key] = value;
+				}
+			} else {
+				Object.assign(headers, options.headers);
+			}
+		}
 
 		if (isMutating && this.csrfToken) {
 			headers['X-CSRF-Token'] = this.csrfToken;
@@ -125,9 +136,7 @@ class ApiService {
 			throw err;
 		}
 
-		if (response.status === 429) {
-			throw new RateLimitedError(parseRetryAfterMs(response));
-		}
+		this.throwIfRateLimited(response);
 
 		if (!response.ok) {
 			const error: ErrorResponse = await response.json();
@@ -135,6 +144,13 @@ class ApiService {
 		}
 
 		return response.json();
+	}
+
+	/** Throw RateLimitedError for 429 responses; no-op otherwise. */
+	private throwIfRateLimited(response: Response): void {
+		if (response.status === 429) {
+			throw new RateLimitedError(parseRetryAfterMs(response.headers.get('Retry-After')));
+		}
 	}
 
 	/**
@@ -152,6 +168,14 @@ class ApiService {
 			// Non-JSON or empty body — fall through to the generic error.
 		}
 
+		return this.classifyForbiddenError(code, message);
+	}
+
+	/**
+	 * Map a parsed 403 error code/message to an Error. Shared by the fetch
+	 * and XHR paths so both classify denials identically.
+	 */
+	private classifyForbiddenError(code: string, message: string): Error {
 		if (code === 'forbidden') {
 			return new IPForbiddenError(message || 'Access denied');
 		}
@@ -170,8 +194,8 @@ class ApiService {
 		return this.request<Instance>(`/instances/${encodeURIComponent(name)}`, { signal });
 	}
 
-	async getInstanceState(name: string): Promise<InstanceState> {
-		return this.request<InstanceState>(`/instances/${encodeURIComponent(name)}/state`);
+	async getInstanceState(name: string): Promise<InstanceStateResponse> {
+		return this.request<InstanceStateResponse>(`/instances/${encodeURIComponent(name)}/state`);
 	}
 
 	async createInstance(request: CreateInstanceRequest): Promise<Instance> {
@@ -362,7 +386,7 @@ class ApiService {
 		}
 
 		if (response.status === 429) {
-			throw new RateLimitedError(parseRetryAfterMs(response));
+			this.throwIfRateLimited(response);
 		}
 
 		if (!response.ok) {
@@ -387,6 +411,106 @@ class ApiService {
 			// Non-JSON or empty body — fall through to the status text.
 		}
 		return response.statusText || '';
+	}
+
+	/**
+	 * Upload a file with progress reporting. `fetch` cannot observe upload
+	 * progress, so this uses XMLHttpRequest with identical semantics to
+	 * `uploadFile` (credentials, CSRF header + single retry, IP redirect,
+	 * rate-limit mapping, tolerant error parsing). `onProgress` receives
+	 * loaded/total bytes; it is not called when the total is unknown.
+	 */
+	async uploadFileWithProgress(
+		instanceName: string,
+		file: File,
+		targetPath?: string,
+		onProgress?: (loaded: number, total: number) => void
+	): Promise<UploadResponse> {
+		try {
+			return await this.xhrUpload(instanceName, file, targetPath, onProgress);
+		} catch (e) {
+			if (e instanceof CSRFExpiredError) {
+				await this.initCSRF();
+				return this.xhrUpload(instanceName, file, targetPath, onProgress);
+			}
+			throw e;
+		}
+	}
+
+	private xhrUpload(
+		instanceName: string,
+		file: File,
+		targetPath?: string,
+		onProgress?: (loaded: number, total: number) => void
+	): Promise<UploadResponse> {
+		return new Promise((resolve, reject) => {
+			const formData = new FormData();
+			formData.append('file', file);
+			if (targetPath) {
+				formData.append('target_path', targetPath);
+			}
+
+			const xhr = new XMLHttpRequest();
+			xhr.open('POST', `${API_BASE}/instances/${encodeURIComponent(instanceName)}/upload`);
+			xhr.withCredentials = true;
+			if (this.csrfToken) {
+				xhr.setRequestHeader('X-CSRF-Token', this.csrfToken);
+			}
+			if (onProgress && xhr.upload) {
+				xhr.upload.onprogress = (event: ProgressEvent) => {
+					if (event.lengthComputable) {
+						onProgress(event.loaded, event.total);
+					}
+				};
+			}
+			xhr.onload = () => {
+				if (xhr.status === 403) {
+					const err = this.classifyXHRForbidden(xhr);
+					if (err instanceof IPForbiddenError) {
+						window.location.href = '/unauthorized';
+					}
+					reject(err);
+					return;
+				}
+				if (xhr.status === 429) {
+					reject(new RateLimitedError(parseRetryAfterMs(xhr.getResponseHeader('Retry-After'))));
+					return;
+				}
+				if (xhr.status >= 200 && xhr.status < 300) {
+					try {
+						resolve(JSON.parse(xhr.responseText) as UploadResponse);
+					} catch {
+						reject(new Error('Upload failed'));
+					}
+					return;
+				}
+				reject(new Error(this.readXHRMessage(xhr) || 'Upload failed'));
+			};
+			xhr.onerror = () => {
+				reject(new Error('Upload failed'));
+			};
+			xhr.send(formData);
+		});
+	}
+
+	/** Parse an XHR 403 body with the same classification as fetch denials. */
+	private classifyXHRForbidden(xhr: XMLHttpRequest): Error {
+		const body = this.readXHRError(xhr);
+		return this.classifyForbiddenError(body.error, body.message);
+	}
+
+	private readXHRError(xhr: XMLHttpRequest): { error: string; message: string } {
+		try {
+			const data = JSON.parse(xhr.responseText) as Partial<ErrorResponse>;
+			return { error: data.error || '', message: data.message || '' };
+		} catch {
+			return { error: '', message: '' };
+		}
+	}
+
+	/** Read an XHR failure message without throwing on empty/non-JSON bodies. */
+	private readXHRMessage(xhr: XMLHttpRequest): string {
+		return this.readXHRError(xhr).message || xhr.statusText || '';
 	}
 
 	async getConfig(): Promise<ConfigResponse> {

@@ -32,7 +32,9 @@ var instanceNameRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
 // multipartOverheadBytes is extra headroom above the file-size limit for
 // multipart framing (boundaries, headers, form fields) when capping the
 // request body. The file content itself is still capped at maxSize.
-const multipartOverheadBytes = 10 * 1024 * 1024
+// It is a var (not const) so tests can shrink it to exercise the
+// request-body cap without sending multi-megabyte bodies.
+var multipartOverheadBytes = int64(10 * 1024 * 1024)
 
 // sanitizeUploadFilename strips any directory components from a client
 // supplied file name and rejects empty or hostile values.
@@ -74,6 +76,9 @@ func resolveUploadTarget(target, filename, defaultDir string) (string, error) {
 	}
 	if strings.HasSuffix(target, "/") {
 		cleaned := path.Clean(target)
+		if cleaned == "/" {
+			return "", errors.New("target path must not be the filesystem root")
+		}
 		if err := validateGuestPath(cleaned); err != nil {
 			return "", err
 		}
@@ -976,6 +981,9 @@ func (h *InstanceHandler) Upload(c echo.Context) error {
 			Message: "file is empty",
 		})
 	}
+	// Defense-in-depth: unreachable via honest clients (the header pre-check
+	// above catches oversized files since Go derives file.Size from the
+	// actual part bytes), but guards against size-spoofing transports.
 	if written > maxSize {
 		logger.API.Load().Warn().Str("ip", c.RealIP()).Int64("size", written).Int64("max", maxSize).Msg("file too large")
 		return tooLargeResponse(c)

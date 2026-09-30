@@ -183,7 +183,15 @@ func TestConfigUpdate_RejectsInvalidUploadSettings(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			e := echo.New()
-			mgr := testConfigManager(t, &config.Config{})
+			// Real servers always carry valid upload settings (Load
+			// normalizes hand-edited files), so partial updates validate
+			// the changed field against a valid baseline.
+			mgr := testConfigManager(t, &config.Config{
+				Upload: config.UploadConfig{
+					MaxFileSizeMB: 100,
+					DefaultPath:   "/home/ubuntu/uploads",
+				},
+			})
 			handler := NewConfigHandler(mgr)
 
 			req := httptest.NewRequest(http.MethodPost, "/api/config", strings.NewReader(tt.body))

@@ -9,8 +9,10 @@
 		onsave: (request: UpdateResourcesRequest) => Promise<void>;
 	}
 
-	let { instance, hostInfo, onclose, onsave } = $props<Props>();
+	let { instance, hostInfo, onclose, onsave }: Props = $props();
 
+	// Mount-time snapshot: the modal remounts on every open ({#if} block),
+	// so capturing the initial instance values is intentional.
 	let cpus = $state(instance.cpu);
 	let memory = $state(parseMemoryToMB(instance.memory));
 	let disk = $state(parseDiskToMB(instance.disk));
