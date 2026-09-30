@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"errors"
 	"net/http"
 	"strings"
 
@@ -32,6 +33,27 @@ func validatePort(port int) error {
 	return nil
 }
 
+// validateUploadDefaultPath checks a guest-absolute POSIX path for use as the
+// upload default directory. The guest is always Linux, so this intentionally
+// uses slash semantics even when the server runs on Windows.
+func validateUploadDefaultPath(path string) error {
+	if path == "" {
+		return errors.New("default_path is required")
+	}
+	if !strings.HasPrefix(path, "/") {
+		return errors.New("default_path must be an absolute path")
+	}
+	if strings.ContainsRune(path, '\x00') {
+		return errors.New("default_path contains invalid characters")
+	}
+	for _, seg := range strings.Split(path, "/") {
+		if seg == ".." {
+			return errors.New("default_path must not contain '..'")
+		}
+	}
+	return nil
+}
+
 func (h *ConfigHandler) Get(c echo.Context) error {
 	cfg := h.cfgManager.Get()
 
@@ -49,6 +71,11 @@ func (h *ConfigHandler) Get(c echo.Context) error {
 		Multipass: models.MultipassConfigResponse{
 			SocketPath:        cfg.Multipass.SocketPath,
 			DefaultTimeoutSec: cfg.Multipass.DefaultTimeoutSec,
+			SSHKeyPath:        cfg.Multipass.SSHKeyPath,
+		},
+		Upload: models.UploadConfigResponse{
+			MaxFileSizeMB: cfg.Upload.MaxFileSizeMB,
+			DefaultPath:   cfg.Upload.DefaultPath,
 		},
 		Logging: models.LoggingConfigResponse{
 			Level:  cfg.Logging.Level,
@@ -148,6 +175,29 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 		}
 		if req.Multipass.SSHKeyPath != "" {
 			cfg.Multipass.SSHKeyPath = req.Multipass.SSHKeyPath
+			modified = true
+		}
+	}
+
+	if req.Upload != nil {
+		if req.Upload.MaxFileSizeMB != nil {
+			if *req.Upload.MaxFileSizeMB < 1 || *req.Upload.MaxFileSizeMB > 1024 {
+				return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+					Error:   "invalid_request",
+					Message: "max_file_size_mb must be between 1 and 1024",
+				})
+			}
+			cfg.Upload.MaxFileSizeMB = *req.Upload.MaxFileSizeMB
+			modified = true
+		}
+		if req.Upload.DefaultPath != "" {
+			if err := validateUploadDefaultPath(req.Upload.DefaultPath); err != nil {
+				return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+					Error:   "invalid_request",
+					Message: err.Error(),
+				})
+			}
+			cfg.Upload.DefaultPath = req.Upload.DefaultPath
 			modified = true
 		}
 	}

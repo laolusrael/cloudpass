@@ -361,12 +361,32 @@ class ApiService {
 			throw err;
 		}
 
+		if (response.status === 429) {
+			throw new RateLimitedError(parseRetryAfterMs(response));
+		}
+
 		if (!response.ok) {
-			const error = await response.json();
-			throw new Error(error.message || 'Upload failed');
+			throw new Error((await this.readUploadErrorMessage(response)) || 'Upload failed');
 		}
 
 		return response.json();
+	}
+
+	/**
+	 * Read an upload failure message without throwing. Upload error bodies
+	 * may be empty or non-JSON (e.g. from proxies or body-limit rejections),
+	 * so fall back to the status text.
+	 */
+	private async readUploadErrorMessage(response: Response): Promise<string> {
+		try {
+			const error = (await response.json()) as Partial<ErrorResponse>;
+			if (error && typeof error.message === 'string' && error.message !== '') {
+				return error.message;
+			}
+		} catch {
+			// Non-JSON or empty body — fall through to the status text.
+		}
+		return response.statusText || '';
 	}
 
 	async getConfig(): Promise<ConfigResponse> {

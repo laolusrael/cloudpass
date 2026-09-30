@@ -4,6 +4,8 @@
 	import { goto } from '$app/navigation';
 	import { api } from '$lib/services/api';
 	import type { Instance, HostInfo, UpdateResourcesRequest } from '$lib/types';
+	import { notifications } from '$lib/stores/notifications';
+	import { validateSelectedFile, formatFileSize } from '$lib/validation/upload';
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Badge from '$lib/components/Badge.svelte';
@@ -21,8 +23,11 @@
 	let showUploadModal = $state(false);
 	let uploadTargetPath = $state('');
 	let uploading = $state(false);
+	let selectedFile = $state<File | null>(null);
+	let uploadError = $state<string | null>(null);
+	let uploadMaxMB = $state(100);
+	let uploadDefaultPath = $state('/home/ubuntu/uploads');
 	let showEditResourcesModal = $state(false);
-	let fileInput: HTMLInputElement;
 
 	const name = $derived($page.params.name);
 
@@ -46,9 +51,22 @@
 		}
 	}
 
+	async function loadUploadLimits() {
+		try {
+			const config = await api.getConfig();
+			if (config.upload) {
+				uploadMaxMB = config.upload.max_file_size_mb;
+				uploadDefaultPath = config.upload.default_path;
+			}
+		} catch (e) {
+			console.error('Failed to load upload limits:', e);
+		}
+	}
+
 	onMount(() => {
 		loadInstance();
 		loadHostInfo();
+		loadUploadLimits();
 	});
 
 	async function handleStart() {
@@ -147,18 +165,53 @@
 		}
 	}
 
+	function openUploadModal() {
+		selectedFile = null;
+		uploadTargetPath = '';
+		uploadError = null;
+		showUploadModal = true;
+	}
+
+	function closeUploadModal() {
+		showUploadModal = false;
+		selectedFile = null;
+		uploadTargetPath = '';
+		uploadError = null;
+	}
+
+	function handleFileSelected(e: Event) {
+		uploadError = null;
+		const input = e.target as HTMLInputElement;
+		const file = input.files?.[0] ?? null;
+		if (!file) {
+			selectedFile = null;
+			return;
+		}
+		const problem = validateSelectedFile(file, uploadMaxMB);
+		if (problem) {
+			selectedFile = null;
+			input.value = '';
+			uploadError = problem;
+			return;
+		}
+		selectedFile = file;
+	}
+
 	async function handleUpload() {
-		if (!instance || !fileInput?.files?.length) return;
-		const file = fileInput.files[0];
+		if (!instance || !selectedFile) return;
+		const file = selectedFile;
 		uploading = true;
-		error = null;
+		uploadError = null;
 		try {
-			await api.uploadFile(instance.name, file, uploadTargetPath || undefined);
-			showUploadModal = false;
-			uploadTargetPath = '';
-			fileInput.value = '';
+			const result = await api.uploadFile(
+				instance.name,
+				file,
+				uploadTargetPath.trim() || undefined
+			);
+			closeUploadModal();
+			notifications.success(`File uploaded to ${result.path ?? file.name}`);
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to upload';
+			uploadError = e instanceof Error ? e.message : 'Failed to upload';
 		} finally {
 			uploading = false;
 		}
@@ -300,9 +353,7 @@
 					<h3 class="text-sm font-medium text-gray-500">Mounts</h3>
 					{#if isRunning}
 						<div class="flex gap-2">
-							<Button variant="secondary" onclick={() => (showUploadModal = true)}
-								>Upload File</Button
-							>
+							<Button variant="secondary" onclick={openUploadModal}>Upload File</Button>
 							<Button variant="secondary" onclick={() => (showMountModal = true)}>Add Mount</Button>
 						</div>
 					{/if}
@@ -389,14 +440,29 @@
 	</div>
 {/if}
 
-<input type="file" bind:this={fileInput} onchange={() => (showUploadModal = true)} class="hidden" />
-
 {#if showUploadModal}
 	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
 		<div class="bg-white rounded-lg p-6 w-full max-w-md">
 			<h3 class="text-lg font-medium mb-4">Upload File</h3>
-			<p class="text-sm text-gray-500 mb-4">Select a file to upload to the instance.</p>
 			<div class="space-y-4">
+				<div>
+					<label for="upload-file" class="block text-sm font-medium text-gray-700 mb-1">
+						File <span class="text-red-500">*</span>
+					</label>
+					<input
+						id="upload-file"
+						type="file"
+						onchange={handleFileSelected}
+						class="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500"
+					/>
+					{#if selectedFile}
+						<p class="mt-1 text-xs text-gray-500">
+							{selectedFile.name} ({formatFileSize(selectedFile.size)})
+						</p>
+					{:else}
+						<p class="mt-1 text-xs text-gray-500">Maximum file size: {uploadMaxMB} MB.</p>
+					{/if}
+				</div>
 				<div>
 					<label for="upload-target" class="block text-sm font-medium text-gray-700 mb-1">
 						Target Path (optional)
@@ -406,18 +472,22 @@
 						type="text"
 						bind:value={uploadTargetPath}
 						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
-						placeholder="/home/ubuntu/uploads"
+						placeholder={uploadDefaultPath}
 					/>
+					<p class="mt-1 text-xs text-gray-500">
+						Empty uploads to {uploadDefaultPath}/&lt;filename&gt;. A trailing / targets a directory
+						(filename appended); otherwise a full file path is required.
+					</p>
 				</div>
 			</div>
-			{#if error}
+			{#if uploadError}
 				<div class="mt-4 p-3 bg-red-50 border border-red-200 rounded">
-					<p class="text-sm text-red-600">{error}</p>
+					<p class="text-sm text-red-600">{uploadError}</p>
 				</div>
 			{/if}
 			<div class="mt-6 flex justify-end gap-3">
-				<Button variant="secondary" onclick={() => (showUploadModal = false)}>Cancel</Button>
-				<Button variant="primary" onclick={handleUpload} disabled={uploading}>
+				<Button variant="secondary" onclick={closeUploadModal}>Cancel</Button>
+				<Button variant="primary" onclick={handleUpload} disabled={uploading || !selectedFile}>
 					{uploading ? 'Uploading...' : 'Upload'}
 				</Button>
 			</div>

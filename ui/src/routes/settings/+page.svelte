@@ -27,6 +27,8 @@
 	let socketPath = $state('');
 	let timeoutSec = $state(0);
 	let sshKeyPath = $state('');
+	let uploadMaxMB = $state(0);
+	let uploadDefaultPath = $state('');
 	let logLevel = $state('');
 	let logFormat = $state('');
 	let logOutput = $state('');
@@ -53,6 +55,8 @@
 			socketPath = config.multipass.socket_path;
 			timeoutSec = config.multipass.default_timeout_seconds;
 			sshKeyPath = config.multipass.ssh_key_path;
+			uploadMaxMB = config.upload.max_file_size_mb;
+			uploadDefaultPath = config.upload.default_path;
 			logLevel = config.logging.level;
 			logFormat = config.logging.format;
 			logOutput = config.logging.output;
@@ -125,6 +129,10 @@
 					socket_path: socketPath,
 					default_timeout_seconds: timeoutSec,
 					ssh_key_path: sshKeyPath
+				},
+				upload: {
+					max_file_size_mb: uploadMaxMB,
+					default_path: uploadDefaultPath
 				},
 				logging: {
 					level: logLevel,
@@ -316,6 +324,42 @@
 						/>
 						<p class="mt-1 text-xs text-gray-500">
 							Leave empty to use default path (~/.cloudpass/multipass_id_rsa)
+						</p>
+					</div>
+				</div>
+			</Card>
+
+			<Card>
+				<h3 class="text-sm font-medium text-gray-500 mb-4">File Upload</h3>
+				<div class="space-y-4">
+					<div>
+						<label for="upload-max-mb" class="block text-sm font-medium text-gray-700 mb-1">
+							Max File Size (MB)
+						</label>
+						<input
+							id="upload-max-mb"
+							type="number"
+							min="1"
+							max="1024"
+							bind:value={uploadMaxMB}
+							class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+							placeholder="100"
+						/>
+					</div>
+					<div>
+						<label for="upload-default-path" class="block text-sm font-medium text-gray-700 mb-1">
+							Default Upload Path
+						</label>
+						<input
+							id="upload-default-path"
+							type="text"
+							bind:value={uploadDefaultPath}
+							class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+							placeholder="/home/ubuntu/uploads"
+						/>
+						<p class="mt-1 text-xs text-gray-500">
+							Absolute guest path used when no target path is given. Applies immediately, no restart
+							required.
 						</p>
 					</div>
 				</div>

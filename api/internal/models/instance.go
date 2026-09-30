@@ -188,6 +188,12 @@ type ClientIPResponse struct {
 type MultipassConfigResponse struct {
 	SocketPath        string `json:"socket_path"`
 	DefaultTimeoutSec int    `json:"default_timeout_seconds"`
+	SSHKeyPath        string `json:"ssh_key_path,omitempty"`
+}
+
+type UploadConfigResponse struct {
+	MaxFileSizeMB int    `json:"max_file_size_mb"`
+	DefaultPath   string `json:"default_path"`
 }
 
 type LoggingConfigResponse struct {
@@ -200,6 +206,7 @@ type ConfigResponse struct {
 	Server    ServerConfigResponse    `json:"server"`
 	Security  SecurityConfigResponse  `json:"security"`
 	Multipass MultipassConfigResponse `json:"multipass"`
+	Upload    UploadConfigResponse    `json:"upload"`
 	Logging   LoggingConfigResponse   `json:"logging"`
 }
 
@@ -207,6 +214,7 @@ type ConfigUpdateRequest struct {
 	Server    *ServerUpdateRequest    `json:"server,omitempty"`
 	Security  *SecurityUpdateRequest  `json:"security,omitempty"`
 	Multipass *MultipassUpdateRequest `json:"multipass,omitempty"`
+	Upload    *UploadUpdateRequest    `json:"upload,omitempty"`
 	Logging   *LoggingUpdateRequest   `json:"logging,omitempty"`
 }
 
@@ -226,6 +234,11 @@ type MultipassUpdateRequest struct {
 	SocketPath        string `json:"socket_path,omitempty"`
 	DefaultTimeoutSec int    `json:"default_timeout_seconds,omitempty"`
 	SSHKeyPath        string `json:"ssh_key_path,omitempty"`
+}
+
+type UploadUpdateRequest struct {
+	MaxFileSizeMB *int   `json:"max_file_size_mb,omitempty"`
+	DefaultPath   string `json:"default_path,omitempty"`
 }
 
 type LoggingUpdateRequest struct {

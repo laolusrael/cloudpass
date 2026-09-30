@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
 	"strconv"
@@ -778,15 +779,19 @@ func (c *multipassClient) UploadFile(instanceName string, localPath string, targ
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	targetDir := filepath.Dir(targetPath)
+	// Guest paths are POSIX even when the server runs on Windows.
+	targetDir := path.Dir(targetPath)
 	if targetDir != "." {
 		mkdirCmd := exec.CommandContext(ctx, "multipass", "exec", instanceName, "--", "mkdir", "-p", targetDir)
 		if err := mkdirCmd.Run(); err != nil {
-			return fmt.Errorf("failed to create target directory: %w", err)
+			return fmt.Errorf("failed to create target directory %q on instance %q: %w", targetDir, instanceName, err)
 		}
 	}
 
-	args := []string{"transfer", "--parents", localPath, instanceName + ":" + targetPath}
+	// The handler resolves targetPath to an explicit guest file path and we
+	// created its parent above, so plain transfer is correct: --parents
+	// would recreate leading source directories under the destination.
+	args := []string{"transfer", localPath, instanceName + ":" + targetPath}
 
 	logger.Multipass.Load().Info().
 		Str("instance", instanceName).

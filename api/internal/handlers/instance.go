@@ -10,7 +10,7 @@ import (
 	"io"
 	"net/http"
 	"os"
-	"path/filepath"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -29,12 +29,64 @@ func NewInstanceHandler(client multipass.Client, cfgManager *config.ConfigManage
 
 var instanceNameRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
 
-func validatePathTraversal(path string) error {
-	cleaned := filepath.Clean(path)
-	if strings.Contains(cleaned, "..") || strings.HasPrefix(cleaned, "/..") || strings.HasPrefix(cleaned, "..") {
-		return errors.New("path contains invalid traversal characters")
+// multipartOverheadBytes is extra headroom above the file-size limit for
+// multipart framing (boundaries, headers, form fields) when capping the
+// request body. The file content itself is still capped at maxSize.
+const multipartOverheadBytes = 10 * 1024 * 1024
+
+// sanitizeUploadFilename strips any directory components from a client
+// supplied file name and rejects empty or hostile values.
+func sanitizeUploadFilename(name string) (string, error) {
+	if strings.ContainsRune(name, '\x00') {
+		return "", errors.New("file name contains invalid characters")
+	}
+	base := path.Base(strings.ReplaceAll(name, "\\", "/"))
+	if base == "" || base == "." || base == "/" || base == ".." {
+		return "", errors.New("file name is required")
+	}
+	return base, nil
+}
+
+// validateGuestPath rejects NUL bytes and ".." segments in a guest (Linux)
+// path. Callers must Clean the path first, which already neutralizes ".."
+// (path.Clean resolves dot-dot segments), so the segment check below is
+// belt-and-braces. It does not cover guest symlink escapes via mkdir -p.
+func validateGuestPath(path string) error {
+	if strings.ContainsRune(path, '\x00') {
+		return errors.New("path contains invalid characters")
+	}
+	for _, seg := range strings.Split(path, "/") {
+		if seg == ".." {
+			return errors.New("path contains invalid traversal characters")
+		}
 	}
 	return nil
+}
+
+// resolveUploadTarget maps the optional target_path form value to the guest
+// destination path: empty means DefaultPath + filename, a trailing slash
+// means directory (filename appended), otherwise the value is the full
+// destination file path and must be absolute. Guest paths always use POSIX
+// semantics, even when the server runs on Windows.
+func resolveUploadTarget(target, filename, defaultDir string) (string, error) {
+	if target == "" {
+		return path.Join(defaultDir, filename), nil
+	}
+	if strings.HasSuffix(target, "/") {
+		cleaned := path.Clean(target)
+		if err := validateGuestPath(cleaned); err != nil {
+			return "", err
+		}
+		return path.Join(cleaned, filename), nil
+	}
+	if !strings.HasPrefix(target, "/") {
+		return "", errors.New("target path must be absolute or empty")
+	}
+	cleaned := path.Clean(target)
+	if err := validateGuestPath(cleaned); err != nil {
+		return "", err
+	}
+	return cleaned, nil
 }
 
 func validateInstanceName(name string) error {
@@ -831,12 +883,57 @@ func (h *InstanceHandler) Upload(c echo.Context) error {
 		})
 	}
 
+	uploadCfg := h.cfgManager.GetUploadConfig()
+	maxSize := int64(uploadCfg.MaxFileSizeMB) * 1024 * 1024
+	if maxSize <= 0 {
+		maxSize = 100 * 1024 * 1024
+	}
+	tooLargeResponse := func(c echo.Context) error {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "file_too_large",
+			Message: fmt.Sprintf("file size exceeds maximum of %d MB", uploadCfg.MaxFileSizeMB),
+		})
+	}
+
+	// Cap the whole request body so an oversized upload is rejected while
+	// streaming instead of after buffering the full multipart body.
+	c.Request().Body = http.MaxBytesReader(c.Response().Writer, c.Request().Body, maxSize+multipartOverheadBytes)
+
 	file, err := c.FormFile("file")
 	if err != nil {
+		if strings.Contains(err.Error(), "request body too large") {
+			logger.API.Load().Warn().Str("ip", c.RealIP()).Msg("upload exceeds maximum request size")
+			return tooLargeResponse(c)
+		}
 		logger.API.Load().Warn().Err(err).Str("ip", c.RealIP()).Msg("no file in request")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "file is required",
+		})
+	}
+
+	// Cheap header check first; the streamed copy below enforces the real cap
+	// since the header value is client-supplied.
+	if file.Size > maxSize {
+		logger.API.Load().Warn().Str("ip", c.RealIP()).Int64("size", file.Size).Int64("max", maxSize).Msg("file too large")
+		return tooLargeResponse(c)
+	}
+
+	filename, err := sanitizeUploadFilename(file.Filename)
+	if err != nil {
+		logger.API.Load().Warn().Err(err).Str("ip", c.RealIP()).Msg("invalid file name")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+		})
+	}
+
+	targetPath, err := resolveUploadTarget(c.FormValue("target_path"), filename, uploadCfg.DefaultPath)
+	if err != nil {
+		logger.API.Load().Warn().Err(err).Str("ip", c.RealIP()).Str("path", c.FormValue("target_path")).Msg("invalid target path")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
 		})
 	}
 
@@ -850,19 +947,7 @@ func (h *InstanceHandler) Upload(c echo.Context) error {
 	}
 	defer src.Close()
 
-	uploadCfg := h.cfgManager.GetUploadConfig()
-	maxSize := int64(uploadCfg.MaxFileSizeMB) * 1024 * 1024
-	if file.Size > maxSize {
-		logger.API.Load().Warn().Str("ip", c.RealIP()).Int64("size", file.Size).Int64("max", maxSize).Msg("file too large")
-		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "file_too_large",
-			Message: fmt.Sprintf("file size exceeds maximum of %d MB", uploadCfg.MaxFileSizeMB),
-		})
-	}
-
-	tmpDir := os.TempDir()
-	tmpFile := filepath.Join(tmpDir, filepath.Base(file.Filename))
-	dst, err := os.Create(tmpFile)
+	tmpFile, err := os.CreateTemp("", "cloudpass-upload-*")
 	if err != nil {
 		logger.API.Load().Error().Err(err).Msg("failed to create temp file")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
@@ -870,32 +955,33 @@ func (h *InstanceHandler) Upload(c echo.Context) error {
 			Message: "failed to process uploaded file",
 		})
 	}
-	defer os.Remove(tmpFile)
-	defer dst.Close()
+	tmpName := tmpFile.Name()
+	defer os.Remove(tmpName)
 
-	if _, err := io.Copy(dst, src); err != nil {
+	written, err := io.Copy(tmpFile, io.LimitReader(src, maxSize+1))
+	if closeErr := tmpFile.Close(); closeErr != nil && err == nil {
+		err = closeErr
+	}
+	if err != nil {
 		logger.API.Load().Error().Err(err).Msg("failed to write temp file")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "upload_error",
 			Message: "failed to process uploaded file",
 		})
 	}
-	dst.Close()
-
-	targetPath := c.FormValue("target_path")
-	if targetPath == "" {
-		targetPath = filepath.Join(uploadCfg.DefaultPath, file.Filename)
-	}
-
-	if err := validatePathTraversal(targetPath); err != nil {
-		logger.API.Load().Warn().Str("ip", c.RealIP()).Str("path", targetPath).Msg("invalid target path")
+	if written == 0 {
+		logger.API.Load().Warn().Str("ip", c.RealIP()).Msg("empty file upload rejected")
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
-			Message: err.Error(),
+			Message: "file is empty",
 		})
 	}
+	if written > maxSize {
+		logger.API.Load().Warn().Str("ip", c.RealIP()).Int64("size", written).Int64("max", maxSize).Msg("file too large")
+		return tooLargeResponse(c)
+	}
 
-	if err := h.client.UploadFile(name, tmpFile, targetPath); err != nil {
+	if err := h.client.UploadFile(name, tmpName, targetPath); err != nil {
 		if strings.Contains(err.Error(), "not found") {
 			logger.API.Load().Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
