@@ -919,7 +919,18 @@ WantedBy=multi-user.target
 | `/api/instances/:name/stop` | POST | Stop instance |
 | `/api/instances/:name/restart` | POST | Restart instance |
 | `/api/instances/:name/suspend` | POST | Suspend instance |
+| `/api/instances/:name/resume` | POST | Resume instance |
+| `/api/instances/:name/export` | POST | Export instance |
+| `/api/instances/import` | POST | Import instance |
+| `/api/instances/:name/snapshots` | GET/POST | List/create snapshots |
+| `/api/instances/:name/snapshots/:id/restore` | POST | Restore snapshot |
+| `/api/instances/:name/snapshots/:id` | DELETE | Delete snapshot |
+| `/api/instances/:name/mounts` | POST/DELETE | Mount/unmount directories |
+| `/api/instances/:name/upload` | POST | Upload file (multipart) |
+| `/api/instances/:name/resources` | PUT | Update CPUs/memory/disk |
 | `/api/instances/:name/shell` | WS | Terminal |
+| `/api/config` | GET/POST | Get/update configuration |
+| `/api/host` | GET | Host resource info |
 | `/api/images` | GET | List images |
 | `/api/networks` | GET | List networks |
 | `/api/networks` | POST | Create network |

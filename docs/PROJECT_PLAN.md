@@ -156,6 +156,10 @@ http://localhost:8080/api
 | `POST` | `/instances/:name/snapshots` | Create snapshot | 3 |
 | `GET` | `/instances/:name/snapshots` | List snapshots | 3 |
 | `POST` | `/instances/:name/snapshots/:id/restore` | Restore snapshot | 3 |
+| `POST` | `/instances/:name/mounts` | Mount host directory | 3 |
+| `DELETE` | `/instances/:name/mounts` | Unmount directory | 3 |
+| `POST` | `/instances/:name/upload` | Upload file (multipart, see 4.5) | 3 |
+| `PUT` | `/instances/:name/resources` | Update CPUs/memory/disk | 3 |
 
 ### 4.3 Data Models
 
@@ -199,7 +203,25 @@ http://localhost:8080/api
 }
 ```
 
-### 4.4 WebSocket Protocol
+### 4.4 File Upload
+
+`POST /instances/:name/upload` accepts `multipart/form-data` with fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `file` | Yes | File content. Empty files rejected; size capped by `upload.max_file_size_mb` (default 100, max 1024). |
+| `target_path` | No | Guest destination. Empty → `upload.default_path/<filename>`. Trailing `/` → directory, filename appended. Otherwise must be an absolute guest file path. |
+
+Directory components are stripped from the client file name. The instance must be
+`Running` (`instance_not_running` otherwise). Parent directories are created on
+the guest before transfer.
+
+Success: `201 {"message": "File uploaded", "path": "<guest path>"}`.
+Errors: `invalid_request` (400), `file_too_large` (400), `instance_not_running`
+(400), `not_found` (404), `upload_error`/`multipass_error` (500), plus standard
+`csrf_*` (403) and `rate_limited` (429).
+
+### 4.5 WebSocket Protocol
 
 **Connection**: `ws://localhost:8080/api/instances/:name/shell`
 

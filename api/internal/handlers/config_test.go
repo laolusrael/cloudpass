@@ -126,6 +126,94 @@ func TestConfigGet_ReturnsProxySettings(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "10.0.0.5")
 }
 
+func TestConfigGet_ReturnsUploadSettings(t *testing.T) {
+	e := echo.New()
+	mgr := testConfigManager(t, &config.Config{
+		Upload: config.UploadConfig{
+			MaxFileSizeMB: 100,
+			DefaultPath:   "/home/ubuntu/uploads",
+		},
+		Multipass: config.MultipassConfig{
+			SSHKeyPath: "/home/user/.cloudpass/multipass_id_rsa",
+		},
+	})
+	handler := NewConfigHandler(mgr)
+
+	req := httptest.NewRequest(http.MethodGet, "/api/config", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler.Get(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), `"max_file_size_mb":100`)
+	assert.Contains(t, rec.Body.String(), "/home/ubuntu/uploads")
+	assert.Contains(t, rec.Body.String(), "multipass_id_rsa")
+}
+
+func TestConfigUpdate_UploadSettings(t *testing.T) {
+	e := echo.New()
+	mgr := testConfigManager(t, &config.Config{})
+	handler := NewConfigHandler(mgr)
+
+	body := `{"upload":{"max_file_size_mb":50,"default_path":"/custom/uploads"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/config", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler.Update(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, 50, mgr.GetUploadConfig().MaxFileSizeMB)
+	assert.Equal(t, "/custom/uploads", mgr.GetUploadConfig().DefaultPath)
+}
+
+func TestConfigUpdate_RejectsInvalidUploadSettings(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"zero size", `{"upload":{"max_file_size_mb":0}}`, "max_file_size_mb must be between 1 and 1024"},
+		{"negative size", `{"upload":{"max_file_size_mb":-5}}`, "max_file_size_mb must be between 1 and 1024"},
+		{"oversize", `{"upload":{"max_file_size_mb":2048}}`, "max_file_size_mb must be between 1 and 1024"},
+		{"relative path", `{"upload":{"default_path":"relative/uploads"}}`, "must be an absolute path"},
+		{"traversal path", `{"upload":{"default_path":"/home/../etc"}}`, "must not contain '..'"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			e := echo.New()
+			mgr := testConfigManager(t, &config.Config{})
+			handler := NewConfigHandler(mgr)
+
+			req := httptest.NewRequest(http.MethodPost, "/api/config", strings.NewReader(tt.body))
+			req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+			rec := httptest.NewRecorder()
+			c := e.NewContext(req, rec)
+
+			require.NoError(t, handler.Update(c))
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Contains(t, rec.Body.String(), tt.want)
+		})
+	}
+}
+
+func TestConfigUpdate_SSHKeyPath(t *testing.T) {
+	e := echo.New()
+	mgr := testConfigManager(t, &config.Config{})
+	handler := NewConfigHandler(mgr)
+
+	body := `{"multipass":{"ssh_key_path":"/home/user/.cloudpass/multipass_id_rsa"}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/config", strings.NewReader(body))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler.Update(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, "/home/user/.cloudpass/multipass_id_rsa", mgr.GetSSHKeyPath())
+}
+
 func TestConfigClientIP_HonorsProxyHeadersWhenEnabled(t *testing.T) {
 	e := echo.New()
 	mgr := testConfigManager(t, &config.Config{

@@ -18,6 +18,9 @@ type MockClient struct {
 	deleteNetworkErr error
 	suspendErr       error
 	resumeErr        error
+	uploadErr        error
+	lastUploadLocal  string
+	lastUploadTarget string
 }
 
 func (m *MockClient) SetListImagesErr(err error) {
@@ -175,6 +178,14 @@ func (m *MockClient) SetSuspendErr(err error) {
 	m.suspendErr = err
 }
 
+func (m *MockClient) SetUploadErr(err error) {
+	m.uploadErr = err
+}
+
+func (m *MockClient) LastUpload() (localPath string, targetPath string) {
+	return m.lastUploadLocal, m.lastUploadTarget
+}
+
 func (m *MockClient) SetResumeErr(err error) {
 	m.resumeErr = err
 }
@@ -204,6 +215,20 @@ func (m *MockClient) ensureTargetPath(instanceName string, targetPath string) er
 }
 
 func (m *MockClient) UploadFile(instanceName string, localPath string, targetPath string) error {
+	if m.uploadErr != nil {
+		return m.uploadErr
+	}
+	// Mirror the real client: unknown instances and non-running instances
+	// fail so handler error mapping stays covered by tests.
+	inst, err := m.GetInstance(instanceName)
+	if err != nil {
+		return err
+	}
+	if inst.State != "Running" {
+		return fmt.Errorf("instance %q is not running (current state: %s)", instanceName, inst.State)
+	}
+	m.lastUploadLocal = localPath
+	m.lastUploadTarget = targetPath
 	return nil
 }
 

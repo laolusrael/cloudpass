@@ -192,7 +192,7 @@ export interface ConfigResponse {
 		default_timeout_seconds: number;
 		ssh_key_path: string;
 	};
-	upload?: {
+	upload: {
 		max_file_size_mb: number;
 		default_path: string;
 	};
