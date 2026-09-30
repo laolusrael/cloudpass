@@ -8,7 +8,6 @@ import (
 	"testing"
 
 	"cloudpass/internal/models"
-	"cloudpass/internal/multipass"
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
@@ -48,12 +47,6 @@ func doAsync(t *testing.T, handler *JobHandler, method func(echo.Context) error,
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
 	require.NotNil(t, resp.Job)
 	return rec.Code, resp
-}
-
-func runningAsyncMock() *multipass.MockClient {
-	mock := multipass.NewMockClient()
-	mock.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
-	return mock
 }
 
 func TestMountAsync_Completes(t *testing.T) {
