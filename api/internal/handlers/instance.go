@@ -775,8 +775,46 @@ func (h *InstanceHandler) Mount(c echo.Context) error {
 		})
 	}
 
-	err := h.client.MountInstance(name, req.SourcePath, req.TargetPath)
+	mountType := req.MountType
+	if mountType == "" {
+		mountType = "classic"
+	}
+	if mountType != "classic" && mountType != "native" {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "mount_type must be classic or native",
+		})
+	}
+	if err := validateMountIDMap(c, req.UIDMap, "uid_map"); err != nil {
+		return err
+	}
+	if err := validateMountIDMap(c, req.GIDMap, "gid_map"); err != nil {
+		return err
+	}
+
+	err := h.client.MountInstance(name, req.SourcePath, req.TargetPath, multipass.MountOptions{
+		Type:   mountType,
+		UIDMap: req.UIDMap,
+		GIDMap: req.GIDMap,
+	})
 	if err != nil {
+		// NOTE: "source path" must be checked before "does not exist" /
+		// "not found" — source errors contain those phrases but mean the
+		// host path is bad, not the instance.
+		if strings.Contains(err.Error(), "source path") {
+			logger.API.Load().Warn().Str("ip", c.RealIP()).Str("source", req.SourcePath).Msg("source path error")
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: err.Error(),
+			})
+		}
+		if strings.Contains(err.Error(), "already mounted") {
+			logger.API.Load().Warn().Str("ip", c.RealIP()).Str("name", name).Str("target", req.TargetPath).Msg("target already mounted")
+			return c.JSON(http.StatusConflict, models.ErrorResponse{
+				Error:   "conflict",
+				Message: err.Error(),
+			})
+		}
 		if strings.Contains(err.Error(), "does not exist") || strings.Contains(err.Error(), "not found") {
 			logger.API.Load().Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
@@ -791,13 +829,6 @@ func (h *InstanceHandler) Mount(c echo.Context) error {
 				Message: err.Error(),
 			})
 		}
-		if strings.Contains(err.Error(), "source path") {
-			logger.API.Load().Warn().Str("ip", c.RealIP()).Str("source", req.SourcePath).Msg("source path error")
-			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
-				Error:   "invalid_request",
-				Message: err.Error(),
-			})
-		}
 		logger.API.Load().Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to mount directory")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
 			Error:   "multipass_error",
@@ -805,12 +836,37 @@ func (h *InstanceHandler) Mount(c echo.Context) error {
 		})
 	}
 
-	logger.API.Load().Info().Str("ip", c.RealIP()).Str("name", name).Str("source", req.SourcePath).Str("target", req.TargetPath).Msg("directory mounted")
+	logger.API.Load().Info().Str("ip", c.RealIP()).Str("name", name).Str("source", req.SourcePath).Str("target", req.TargetPath).Str("type", mountType).Msg("directory mounted")
 	return c.JSON(http.StatusCreated, models.MountResponse{
 		Message: "Directory mounted",
 		Source:  req.SourcePath,
 		Target:  req.TargetPath,
 	})
+}
+
+// validateMountIDMap rejects malformed optional "host:instance" ID mappings
+// with a 400 response, or returns nil when valid (empty means unset).
+func validateMountIDMap(c echo.Context, mapping string, field string) error {
+	if mapping == "" {
+		return nil
+	}
+	parts := strings.Split(mapping, ":")
+	if len(parts) != 2 {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: fmt.Sprintf("%s must be host:instance IDs", field),
+		})
+	}
+	for _, part := range parts {
+		id, err := strconv.Atoi(part)
+		if err != nil || id < 0 {
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: fmt.Sprintf("%s must be host:instance IDs", field),
+			})
+		}
+	}
+	return nil
 }
 
 func (h *InstanceHandler) Unmount(c echo.Context) error {
@@ -849,7 +905,7 @@ func (h *InstanceHandler) Unmount(c echo.Context) error {
 
 	err := h.client.UnmountInstance(name, req.TargetPath)
 	if err != nil {
-		if strings.Contains(err.Error(), "does not exist") {
+		if strings.Contains(err.Error(), "does not exist") || strings.Contains(err.Error(), "not found") {
 			logger.API.Load().Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",

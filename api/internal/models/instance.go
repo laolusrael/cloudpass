@@ -152,6 +152,9 @@ type InstanceExport struct {
 type MountRequest struct {
 	SourcePath string `json:"source_path"`
 	TargetPath string `json:"target_path"`
+	MountType  string `json:"mount_type,omitempty"`
+	UIDMap     string `json:"uid_map,omitempty"`
+	GIDMap     string `json:"gid_map,omitempty"`
 }
 
 type UnmountRequest struct {
