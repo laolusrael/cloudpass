@@ -34,6 +34,7 @@ func validatePort(port int) error {
 
 func (h *ConfigHandler) Get(c echo.Context) error {
 	cfg := h.cfgManager.Get()
+	env := h.cfgManager.GetEnvironment()
 
 	return c.JSON(http.StatusOK, models.ConfigResponse{
 		Server: models.ServerConfigResponse{
@@ -54,6 +55,14 @@ func (h *ConfigHandler) Get(c echo.Context) error {
 		Upload: models.UploadConfigResponse{
 			MaxFileSizeMB: cfg.Upload.MaxFileSizeMB,
 			DefaultPath:   cfg.Upload.DefaultPath,
+			StagingDir:    cfg.Upload.StagingDir,
+		},
+		Environment: models.EnvironmentResponse{
+			MultipassMode:       env.MultipassMode,
+			Driver:              env.Driver,
+			Containerized:       env.Containerized,
+			StagingDirEffective: h.cfgManager.EffectiveStagingDir(),
+			DefaultMountType:    env.DefaultMountType(),
 		},
 		Logging: models.LoggingConfigResponse{
 			Level:  cfg.Logging.Level,
@@ -160,11 +169,15 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 	if req.Upload != nil {
 		maxMB := cfg.Upload.MaxFileSizeMB
 		defPath := cfg.Upload.DefaultPath
+		staging := cfg.Upload.StagingDir
 		if req.Upload.MaxFileSizeMB != nil {
 			maxMB = *req.Upload.MaxFileSizeMB
 		}
 		if req.Upload.DefaultPath != "" {
 			defPath = req.Upload.DefaultPath
+		}
+		if req.Upload.StagingDir != "" {
+			staging = req.Upload.StagingDir
 		}
 		if err := config.ValidateUploadSettings(maxMB, defPath); err != nil {
 			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
@@ -172,9 +185,16 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 				Message: err.Error(),
 			})
 		}
-		if maxMB != cfg.Upload.MaxFileSizeMB || defPath != cfg.Upload.DefaultPath {
+		if err := config.ValidateUploadStagingDir(staging); err != nil {
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: err.Error(),
+			})
+		}
+		if maxMB != cfg.Upload.MaxFileSizeMB || defPath != cfg.Upload.DefaultPath || staging != cfg.Upload.StagingDir {
 			cfg.Upload.MaxFileSizeMB = maxMB
 			cfg.Upload.DefaultPath = defPath
+			cfg.Upload.StagingDir = staging
 			modified = true
 		}
 	}

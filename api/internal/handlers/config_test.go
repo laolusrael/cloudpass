@@ -1,6 +1,7 @@
 package handlers
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -148,6 +149,9 @@ func TestConfigGet_ReturnsUploadSettings(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), `"max_file_size_mb":100`)
 	assert.Contains(t, rec.Body.String(), "/home/ubuntu/uploads")
 	assert.Contains(t, rec.Body.String(), "multipass_id_rsa")
+	assert.Contains(t, rec.Body.String(), `"multipass_mode"`)
+	assert.Contains(t, rec.Body.String(), `"staging_dir_effective"`)
+	assert.Contains(t, rec.Body.String(), `"default_mount_type"`)
 }
 
 func TestConfigUpdate_UploadSettings(t *testing.T) {
@@ -155,7 +159,9 @@ func TestConfigUpdate_UploadSettings(t *testing.T) {
 	mgr := testConfigManager(t, &config.Config{})
 	handler := NewConfigHandler(mgr)
 
-	body := `{"upload":{"max_file_size_mb":50,"default_path":"/custom/uploads"}}`
+	// TempDir-anchored so the staging path is absolute on every OS.
+	staging := filepath.Join(t.TempDir(), "staging")
+	body := fmt.Sprintf(`{"upload":{"max_file_size_mb":50,"default_path":"/custom/uploads","staging_dir":%q}}`, staging)
 	req := httptest.NewRequest(http.MethodPost, "/api/config", strings.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
@@ -165,6 +171,7 @@ func TestConfigUpdate_UploadSettings(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, 50, mgr.GetUploadConfig().MaxFileSizeMB)
 	assert.Equal(t, "/custom/uploads", mgr.GetUploadConfig().DefaultPath)
+	assert.Equal(t, staging, mgr.GetUploadConfig().StagingDir)
 }
 
 func TestConfigUpdate_RejectsInvalidUploadSettings(t *testing.T) {
@@ -178,6 +185,7 @@ func TestConfigUpdate_RejectsInvalidUploadSettings(t *testing.T) {
 		{"oversize", `{"upload":{"max_file_size_mb":2048}}`, "max_file_size_mb must be between 1 and 1024"},
 		{"relative path", `{"upload":{"default_path":"relative/uploads"}}`, "must be an absolute path"},
 		{"traversal path", `{"upload":{"default_path":"/home/../etc"}}`, "must not contain '..'"},
+		{"relative staging", `{"upload":{"staging_dir":"relative/staging"}}`, "staging_dir must be an absolute path"},
 	}
 
 	for _, tt := range tests {

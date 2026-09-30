@@ -49,4 +49,11 @@ describe('validateUploadSettings', () => {
 		expect(validateUploadSettings(100, 'relative')).toContain('absolute');
 		expect(validateUploadSettings(100, '/a/../b')).toContain('..');
 	});
+
+	it('validates the optional staging dir', () => {
+		expect(validateUploadSettings(100, '/x', '')).toBeNull();
+		expect(validateUploadSettings(100, '/x', '/var/staging')).toBeNull();
+		expect(validateUploadSettings(100, '/x', 'C:\\staging')).toBeNull();
+		expect(validateUploadSettings(100, '/x', 'relative/staging')).toContain('absolute');
+	});
 });

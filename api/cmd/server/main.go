@@ -80,6 +80,15 @@ func main() {
 
 	log.Info().Msg("starting cloudpass API server")
 
+	env := cfgManager.GetEnvironment()
+	log.Info().
+		Str("multipass_mode", env.MultipassMode).
+		Str("driver", env.Driver).
+		Bool("containerized", env.Containerized).
+		Str("staging_dir", cfgManager.EffectiveStagingDir()).
+		Str("default_mount_type", env.DefaultMountType()).
+		Msg("detected host environment")
+
 	mpClient := multipass.NewClient(cfgManager.GetMultipassTimeout())
 
 	if cfg.Multipass.Passphrase != "" {

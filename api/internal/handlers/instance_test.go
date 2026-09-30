@@ -13,6 +13,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testConfig() *config.ConfigManager {
@@ -708,6 +709,45 @@ func TestUnmount_InstanceNotFound(t *testing.T) {
 
 	assert.Equal(t, http.StatusNotFound, rec.Code)
 	assert.Contains(t, rec.Body.String(), "not_found")
+}
+
+func TestMount_AutoTypeFollowsEnvironment(t *testing.T) {
+	t.Setenv("CLOUDPASS_MULTIPASS_MODE", "snap")
+
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+	_, _, opts := mockClient.LastMount()
+	// No multipass driver here, so the environment default is classic even
+	// in snap mode; driver matrix is covered by TestDefaultMountType.
+	assert.Equal(t, "classic", opts.Type)
+}
+
+func TestMount_SnapTmpSourceRejected(t *testing.T) {
+	t.Setenv("CLOUDPASS_MULTIPASS_MODE", "snap")
+
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"source_path": "/tmp/projects", "target_path": "/home/ubuntu/projects"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "snap-confined")
 }
 
 func TestUpdateResources_Success(t *testing.T) {

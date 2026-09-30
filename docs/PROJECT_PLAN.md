@@ -222,6 +222,12 @@ Errors: `invalid_request` (400), `file_too_large` (400), `instance_not_running`
 (400), `not_found` (404), `upload_error`/`multipass_error` (500), plus standard
 `csrf_*` (403) and `rate_limited` (429).
 
+Uploads are staged in `upload.staging_dir` when set, otherwise automatically:
+snap installs of multipass run the transfer in confinement with a private
+`/tmp`, so the server stages under `$HOME/cloudpass-staging`; native installs
+use the platform temp dir. Explicit config always wins; the effective directory
+is reported read-only as `environment.staging_dir_effective` in `GET /config`.
+
 ### 4.5 Host Directory Mounts
 
 `POST /instances/:name/mounts` accepts JSON fields:
@@ -234,7 +240,10 @@ Errors: `invalid_request` (400), `file_too_large` (400), `instance_not_running`
 | `uid_map` / `gid_map` | No | Optional `host:instance` numeric ID mappings. |
 
 The instance must be `Running`. Mounts persist across restarts; re-mounting an
-existing target returns `conflict` (409).
+existing target returns `conflict` (409). When `mount_type` is omitted the
+server auto-selects from the detected driver (native on QEMU/Hyper-V, classic
+otherwise); with snap-confined multipass, sources under `/tmp`/`/var/tmp` are
+rejected up front since the daemon cannot see them.
 
 Success: `201 {"message": "Directory mounted", "source": ..., "target": ...}`.
 Errors: `invalid_request` (400), `instance_not_running` (400), `not_found`

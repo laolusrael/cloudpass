@@ -87,6 +87,8 @@ type ConfigManager struct {
 	cfg        *Config
 	configPath string
 	version    int64
+	envOnce    sync.Once
+	env        Environment
 }
 
 // NewConfigManager creates a new ConfigManager from an existing config.
@@ -180,6 +182,28 @@ func (m *ConfigManager) GetLoggingConfig() LoggingConfig {
 	defer m.mu.RUnlock()
 
 	return m.cfg.Logging
+}
+
+// GetEnvironment returns the detected host environment, probing once and
+// caching the result. Detection degrades to safe defaults, never errors.
+func (m *ConfigManager) GetEnvironment() Environment {
+	m.envOnce.Do(func() {
+		m.env = DetectEnvironment()
+	})
+	return m.env
+}
+
+// EffectiveStagingDir resolves the upload staging directory: explicit
+// upload.staging_dir wins, otherwise the install mode decides
+// (snap → snap-visible home subdirectory, else platform temp dir).
+func (m *ConfigManager) EffectiveStagingDir() string {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.cfg.Upload.StagingDir != "" {
+		return m.cfg.Upload.StagingDir
+	}
+	return AutoStagingDir(m.GetEnvironment().MultipassMode)
 }
 
 // GetUploadConfig returns the current upload configuration.

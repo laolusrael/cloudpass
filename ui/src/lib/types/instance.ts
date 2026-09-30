@@ -204,6 +204,14 @@ export interface ConfigResponse {
 	upload: {
 		max_file_size_mb: number;
 		default_path: string;
+		staging_dir: string;
+	};
+	environment: {
+		multipass_mode: string;
+		driver: string;
+		containerized: boolean;
+		staging_dir_effective: string;
+		default_mount_type: string;
 	};
 	logging: {
 		level: string;
@@ -231,6 +239,7 @@ export interface ConfigUpdateRequest {
 	upload?: {
 		max_file_size_mb?: number;
 		default_path?: string;
+		staging_dir?: string;
 	};
 	logging?: {
 		level?: string;

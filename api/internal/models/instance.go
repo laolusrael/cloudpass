@@ -197,6 +197,7 @@ type MultipassConfigResponse struct {
 type UploadConfigResponse struct {
 	MaxFileSizeMB int    `json:"max_file_size_mb"`
 	DefaultPath   string `json:"default_path"`
+	StagingDir    string `json:"staging_dir,omitempty"`
 }
 
 type LoggingConfigResponse struct {
@@ -206,11 +207,12 @@ type LoggingConfigResponse struct {
 }
 
 type ConfigResponse struct {
-	Server    ServerConfigResponse    `json:"server"`
-	Security  SecurityConfigResponse  `json:"security"`
-	Multipass MultipassConfigResponse `json:"multipass"`
-	Upload    UploadConfigResponse    `json:"upload"`
-	Logging   LoggingConfigResponse   `json:"logging"`
+	Server      ServerConfigResponse    `json:"server"`
+	Security    SecurityConfigResponse  `json:"security"`
+	Multipass   MultipassConfigResponse `json:"multipass"`
+	Upload      UploadConfigResponse    `json:"upload"`
+	Environment EnvironmentResponse     `json:"environment"`
+	Logging     LoggingConfigResponse   `json:"logging"`
 }
 
 type ConfigUpdateRequest struct {
@@ -242,6 +244,17 @@ type MultipassUpdateRequest struct {
 type UploadUpdateRequest struct {
 	MaxFileSizeMB *int   `json:"max_file_size_mb,omitempty"`
 	DefaultPath   string `json:"default_path,omitempty"`
+	StagingDir    string `json:"staging_dir,omitempty"`
+}
+
+// EnvironmentResponse describes the detected host environment. Read-only:
+// the server decides, operators can only override via dedicated fields.
+type EnvironmentResponse struct {
+	MultipassMode       string `json:"multipass_mode"`
+	Driver              string `json:"driver"`
+	Containerized       bool   `json:"containerized"`
+	StagingDirEffective string `json:"staging_dir_effective"`
+	DefaultMountType    string `json:"default_mount_type"`
 }
 
 type LoggingUpdateRequest struct {

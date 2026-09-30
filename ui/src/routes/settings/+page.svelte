@@ -31,6 +31,10 @@
 	let sshKeyPath = $state('');
 	let uploadMaxMB = $state(0);
 	let uploadDefaultPath = $state('');
+	let uploadStagingDir = $state('');
+	let uploadStagingEffective = $state('');
+	let uploadDefaultMountType = $state('');
+	let uploadMultipassMode = $state('');
 	let logLevel = $state('');
 	let logFormat = $state('');
 	let logOutput = $state('');
@@ -60,6 +64,10 @@
 			sshKeyPath = config.multipass.ssh_key_path;
 			uploadMaxMB = config.upload.max_file_size_mb;
 			uploadDefaultPath = config.upload.default_path;
+			uploadStagingDir = config.upload.staging_dir ?? '';
+			uploadStagingEffective = config.environment.staging_dir_effective;
+			uploadDefaultMountType = config.environment.default_mount_type;
+			uploadMultipassMode = config.environment.multipass_mode;
 			logLevel = config.logging.level;
 			logFormat = config.logging.format;
 			logOutput = config.logging.output;
@@ -91,7 +99,7 @@
 			ipError = decision.error;
 			return;
 		}
-		const uploadProblem = validateUploadSettings(uploadMaxMB, uploadDefaultPath);
+		const uploadProblem = validateUploadSettings(uploadMaxMB, uploadDefaultPath, uploadStagingDir);
 		if (uploadProblem) {
 			uploadError = uploadProblem;
 			return;
@@ -141,7 +149,8 @@
 				},
 				upload: {
 					max_file_size_mb: uploadMaxMB,
-					default_path: uploadDefaultPath
+					default_path: uploadDefaultPath,
+					staging_dir: uploadStagingDir.trim() || undefined
 				},
 				logging: {
 					level: logLevel,
@@ -374,6 +383,28 @@
 							<p class="mt-1 text-xs text-red-600">{uploadError}</p>
 						{/if}
 					</div>
+					<div>
+						<label for="upload-staging-dir" class="block text-sm font-medium text-gray-700 mb-1">
+							Staging Directory (optional)
+						</label>
+						<input
+							id="upload-staging-dir"
+							type="text"
+							bind:value={uploadStagingDir}
+							class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+							placeholder="Empty = automatic"
+						/>
+						<p class="mt-1 text-xs text-gray-500">
+							Host directory for temporary upload files. Empty selects automatically based on the
+							detected setup (currently: {uploadStagingEffective || 'unknown'}). Snap installs of
+							multipass cannot see the system temp dir, so keep this empty unless you know the
+							multipass process can read the path.
+						</p>
+					</div>
+					<p class="text-xs text-gray-500">
+						Detected setup: multipass {uploadMultipassMode || 'unknown'}, default mount type
+						{uploadDefaultMountType || 'classic'}.
+					</p>
 				</div>
 			</Card>
 

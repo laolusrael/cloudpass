@@ -31,6 +31,7 @@ type ServerConfig struct {
 type UploadConfig struct {
 	MaxFileSizeMB int    `yaml:"max_file_size_mb"`
 	DefaultPath   string `yaml:"default_path"`
+	StagingDir    string `yaml:"staging_dir"`
 }
 
 type SecurityConfig struct {
@@ -109,6 +110,18 @@ func ValidateUploadSettings(maxFileSizeMB int, defaultPath string) error {
 		return fmt.Errorf("max_file_size_mb must be between 1 and 1024")
 	}
 	return ValidateUploadDefaultPath(defaultPath)
+}
+
+// ValidateUploadStagingDir checks an optional host-side staging directory:
+// empty means auto-select, otherwise it must be absolute (host semantics).
+func ValidateUploadStagingDir(dir string) error {
+	if dir == "" {
+		return nil
+	}
+	if !filepath.IsAbs(dir) {
+		return fmt.Errorf("staging_dir must be an absolute path")
+	}
+	return nil
 }
 
 var defaultConfig = Config{
@@ -299,6 +312,10 @@ func Load(path string) (*Config, error) {
 	if err := ValidateUploadDefaultPath(cfg.Upload.DefaultPath); err != nil {
 		fmt.Printf("Warning: invalid upload.default_path %q (%v), resetting to default %q\n", cfg.Upload.DefaultPath, err, defaultConfig.Upload.DefaultPath)
 		cfg.Upload.DefaultPath = defaultConfig.Upload.DefaultPath
+	}
+	if err := ValidateUploadStagingDir(cfg.Upload.StagingDir); err != nil {
+		fmt.Printf("Warning: invalid upload.staging_dir %q (%v), resetting to auto-select\n", cfg.Upload.StagingDir, err)
+		cfg.Upload.StagingDir = ""
 	}
 
 	if len(cfg.Security.AllowedIPs) == 0 {
