@@ -775,37 +775,24 @@ func (h *InstanceHandler) Mount(c echo.Context) error {
 		})
 	}
 
-	mountType := req.MountType
-	if mountType == "" {
-		env := h.cfgManager.GetEnvironment()
-		mountType = env.DefaultMountType()
+	env := h.cfgManager.GetEnvironment()
+	opts, err := resolveMountOptions(req, env)
+	if err != nil {
+		if req.MountType == "" {
+			logger.API.Load().Info().Str("ip", c.RealIP()).Str("name", name).Str("driver", env.Driver).Msg("auto-selected mount type rejected")
+		}
+		logger.API.Load().Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid mount options")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+		})
+	}
+	mountType := opts.Type
+	if req.MountType == "" {
 		logger.API.Load().Info().Str("ip", c.RealIP()).Str("name", name).Str("type", mountType).Str("driver", env.Driver).Msg("auto-selected mount type")
 	}
-	if mountType != "classic" && mountType != "native" {
-		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Message: "mount_type must be classic or native",
-		})
-	}
-	if h.cfgManager.GetEnvironment().SnapDaemonInvisible(req.SourcePath) {
-		logger.API.Load().Warn().Str("ip", c.RealIP()).Str("source", req.SourcePath).Msg("mount source likely invisible to snap multipass")
-		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Message: fmt.Sprintf("source path %q is likely invisible to snap-confined multipass (private /tmp); use a path under your home directory", req.SourcePath),
-		})
-	}
-	if err := validateMountIDMap(c, req.UIDMap, "uid_map"); err != nil {
-		return err
-	}
-	if err := validateMountIDMap(c, req.GIDMap, "gid_map"); err != nil {
-		return err
-	}
 
-	err := h.client.MountInstance(name, req.SourcePath, req.TargetPath, multipass.MountOptions{
-		Type:   mountType,
-		UIDMap: req.UIDMap,
-		GIDMap: req.GIDMap,
-	})
+	err = h.client.MountInstance(name, req.SourcePath, req.TargetPath, opts)
 	if err != nil {
 		// NOTE: "source path" must be checked before "does not exist" /
 		// "not found" — source errors contain those phrases but mean the
@@ -853,26 +840,43 @@ func (h *InstanceHandler) Mount(c echo.Context) error {
 	})
 }
 
-// validateMountIDMap rejects malformed optional "host:instance" ID mappings
-// with a 400 response, or returns nil when valid (empty means unset).
-func validateMountIDMap(c echo.Context, mapping string, field string) error {
+// resolveMountOptions validates a mount request against the detected
+// environment and returns execution options. Shared by the sync and async
+// mount endpoints so both enforce identical rules.
+func resolveMountOptions(req models.MountRequest, env config.Environment) (multipass.MountOptions, error) {
+	mountType := req.MountType
+	if mountType == "" {
+		mountType = env.DefaultMountType()
+	}
+	if mountType != "classic" && mountType != "native" {
+		return multipass.MountOptions{}, errors.New("mount_type must be classic or native")
+	}
+	if env.SnapDaemonInvisible(req.SourcePath) {
+		return multipass.MountOptions{}, fmt.Errorf("source path %q is likely invisible to snap-confined multipass (private /tmp); use a path under your home directory", req.SourcePath)
+	}
+	if err := checkMountIDMap(req.UIDMap, "uid_map"); err != nil {
+		return multipass.MountOptions{}, err
+	}
+	if err := checkMountIDMap(req.GIDMap, "gid_map"); err != nil {
+		return multipass.MountOptions{}, err
+	}
+	return multipass.MountOptions{Type: mountType, UIDMap: req.UIDMap, GIDMap: req.GIDMap}, nil
+}
+
+// checkMountIDMap validates an optional "host:instance" numeric ID mapping
+// (empty means unset).
+func checkMountIDMap(mapping string, field string) error {
 	if mapping == "" {
 		return nil
 	}
 	parts := strings.Split(mapping, ":")
 	if len(parts) != 2 {
-		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
-			Error:   "invalid_request",
-			Message: fmt.Sprintf("%s must be host:instance IDs", field),
-		})
+		return fmt.Errorf("%s must be host:instance IDs", field)
 	}
 	for _, part := range parts {
 		id, err := strconv.Atoi(part)
 		if err != nil || id < 0 {
-			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
-				Error:   "invalid_request",
-				Message: fmt.Sprintf("%s must be host:instance IDs", field),
-			})
+			return fmt.Errorf("%s must be host:instance IDs", field)
 		}
 	}
 	return nil

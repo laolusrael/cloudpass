@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { api } from '../src/lib/services/api';
 
 vi.mock('$lib/services/api', async () => {
-	const actual = await vi.importActual<typeof import('../src/lib/services/api')>('../src/lib/services/api');
+	const actual =
+		await vi.importActual<typeof import('../src/lib/services/api')>('../src/lib/services/api');
 	return {
 		api: actual.api
 	};
@@ -45,6 +46,11 @@ describe('ApiService', () => {
 			'exportInstance',
 			'importInstance',
 			'mountInstance',
+			'mountInstanceAsync',
+			'createSnapshotAsync',
+			'restoreSnapshotAsync',
+			'exportInstanceAsync',
+			'importInstanceAsync',
 			'unmountInstance',
 			'uploadFile',
 			'getConfig',

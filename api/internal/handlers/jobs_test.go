@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"cloudpass/internal/config"
 	"cloudpass/internal/models"
 	"cloudpass/internal/multipass"
 
@@ -23,7 +24,7 @@ func testJobHandler(t *testing.T) (*JobHandler, *JobStorage, *multipass.MockClie
 	storage, err := NewJobStorage(t.TempDir())
 	require.NoError(t, err)
 	mock := multipass.NewMockClient()
-	handler := NewJobHandler(mock, 60, storage, NewEventHub())
+	handler := NewJobHandler(mock, 60, storage, NewEventHub(), testConfigManager(t, &config.Config{}))
 	return handler, storage, mock
 }
 

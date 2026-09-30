@@ -16,6 +16,7 @@ type Job struct {
 	Type           string    `json:"type"`
 	Status         JobStatus `json:"status"`
 	InstanceName   string    `json:"instance_name,omitempty"`
+	Result         string    `json:"result,omitempty"`
 	Error          string    `json:"error,omitempty"`
 	IdempotencyKey string    `json:"idempotency_key,omitempty"`
 	CreatedAt      time.Time `json:"created_at"`
