@@ -80,15 +80,21 @@ function createJobsStore() {
 					try {
 						const data: JobEvent = JSON.parse(event.data);
 						if (data.job) {
+							// Global toasts cover instance provisioning (create/import),
+							// which has no originating page poller. Mounts, snapshots,
+							// and exports are polled by their own pages.
+							const notifies = data.job.type === 'create_instance' || data.job.type === 'import';
 							if (data.job.status === 'completed' || data.job.status === 'failed') {
 								update((jobs) => jobs.filter((j) => j.id !== data.job.id));
 								await instances.refresh();
-								notifications.show(
-									data.job.status === 'completed'
-										? `Instance "${data.job.instance_name}" is ready`
-										: `Instance "${data.job.instance_name}" failed: ${data.job.error || 'Unknown error'}`,
-									data.job.status === 'completed' ? 'success' : 'error'
-								);
+								if (notifies) {
+									notifications.show(
+										data.job.status === 'completed'
+											? `Instance "${data.job.instance_name}" is ready`
+											: `Instance "${data.job.instance_name}" failed: ${data.job.error || 'Unknown error'}`,
+										data.job.status === 'completed' ? 'success' : 'error'
+									);
+								}
 							} else if (data.job.status === 'running' || data.job.status === 'pending') {
 								update((jobs) => {
 									const existing = jobs.find((j) => j.id === data.job.id);

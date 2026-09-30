@@ -60,6 +60,16 @@ export class RateLimitedError extends Error {
 /** Fallback wait when a 429 carries no (or an unparsable) Retry-After header. */
 const DEFAULT_RETRY_AFTER_MS = 5000;
 
+/**
+ * Default budget for JSON API requests. Safe because every minute-scale
+ * operation runs as a background job (202 + poll); only stalled connections
+ * hit this. Uploads use UPLOAD_TIMEOUT_MS instead (large bodies need it).
+ */
+const DEFAULT_REQUEST_TIMEOUT_MS = 60000;
+
+/** Matches the server ReadTimeout so large uploads are not cut off client-side. */
+const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
+
 function parseRetryAfterMs(retryAfter: string | null): number {
 	if (retryAfter !== null) {
 		const seconds = Number(retryAfter);
@@ -72,8 +82,20 @@ function parseRetryAfterMs(retryAfter: string | null): number {
 
 class ApiService {
 	private csrfToken: string | null = null;
+	private csrfRefresh: Promise<void> | null = null;
 
 	async initCSRF(): Promise<void> {
+		// Single-flight: concurrent 403s share one refresh instead of each
+		// minting/racing tokens against each other.
+		if (!this.csrfRefresh) {
+			this.csrfRefresh = this.fetchCSRFToken().finally(() => {
+				this.csrfRefresh = null;
+			});
+		}
+		return this.csrfRefresh;
+	}
+
+	private async fetchCSRFToken(): Promise<void> {
 		try {
 			const response = await fetch(`${API_BASE}/csrf/token`, {
 				credentials: 'include'
@@ -116,11 +138,36 @@ class ApiService {
 			headers['X-CSRF-Token'] = this.csrfToken;
 		}
 
-		const response = await fetch(`${API_BASE}${endpoint}`, {
-			...options,
-			credentials: 'include',
-			headers
-		});
+		// Bound every request unless the caller manages its own signal
+		// (e.g. cancellable create flows). Prevents spinners hanging
+		// forever on stalled connections.
+		let ownedController: AbortController | null = null;
+		let ownedTimer: ReturnType<typeof setTimeout> | null = null;
+		let signal = options.signal;
+		if (!signal) {
+			ownedController = new AbortController();
+			ownedTimer = setTimeout(() => ownedController?.abort(), DEFAULT_REQUEST_TIMEOUT_MS);
+			signal = ownedController.signal;
+		}
+
+		let response: Response;
+		try {
+			response = await fetch(`${API_BASE}${endpoint}`, {
+				...options,
+				credentials: 'include',
+				headers,
+				signal
+			});
+		} catch (e) {
+			if (ownedController?.signal.aborted) {
+				throw new Error('Request timed out. Please try again.');
+			}
+			throw e;
+		} finally {
+			if (ownedTimer !== null) {
+				clearTimeout(ownedTimer);
+			}
+		}
 
 		if (response.status === 403) {
 			const err = await this.readForbiddenError(response);
@@ -337,6 +384,85 @@ class ApiService {
 		});
 	}
 
+	/**
+	 * Dispatch a long-running operation as a background job. Returns
+	 * immediately (202); track completion via getJob() or the jobs store
+	 * (SSE + polling). Pass a fresh idempotency key per user action so
+	 * network retries of the same dispatch collapse onto one job.
+	 */
+	private async postAsyncJob(
+		url: string,
+		body: unknown,
+		options: { idempotencyKey?: string; signal?: AbortSignal } = {}
+	): Promise<Job> {
+		const headers: Record<string, string> = {};
+		if (options.idempotencyKey) {
+			headers['Idempotency-Key'] = options.idempotencyKey;
+		}
+		const data = await this.request<JobResponse>(url, {
+			method: 'POST',
+			body: JSON.stringify(body),
+			headers,
+			signal: options.signal
+		});
+		return data.job;
+	}
+
+	async mountInstanceAsync(
+		instanceName: string,
+		request: MountRequest,
+		options: { idempotencyKey?: string; signal?: AbortSignal } = {}
+	): Promise<Job> {
+		return this.postAsyncJob(
+			`/instances/${encodeURIComponent(instanceName)}/mounts/async`,
+			request,
+			options
+		);
+	}
+
+	async createSnapshotAsync(
+		instanceName: string,
+		request: CreateSnapshotRequest,
+		options: { idempotencyKey?: string; signal?: AbortSignal } = {}
+	): Promise<Job> {
+		return this.postAsyncJob(
+			`/instances/${encodeURIComponent(instanceName)}/snapshots/async`,
+			request,
+			options
+		);
+	}
+
+	async restoreSnapshotAsync(
+		instanceName: string,
+		snapshotName: string,
+		options: { idempotencyKey?: string; signal?: AbortSignal } = {}
+	): Promise<Job> {
+		return this.postAsyncJob(
+			`/instances/${encodeURIComponent(instanceName)}/snapshots/${encodeURIComponent(snapshotName)}/restore/async`,
+			{},
+			options
+		);
+	}
+
+	async exportInstanceAsync(
+		instanceName: string,
+		outputPath?: string,
+		options: { idempotencyKey?: string; signal?: AbortSignal } = {}
+	): Promise<Job> {
+		return this.postAsyncJob(
+			`/instances/${encodeURIComponent(instanceName)}/export/async`,
+			{ output_path: outputPath },
+			options
+		);
+	}
+
+	async importInstanceAsync(
+		request: ImportInstanceRequest,
+		options: { idempotencyKey?: string; signal?: AbortSignal } = {}
+	): Promise<Job> {
+		return this.postAsyncJob('/instances/import/async', request, options);
+	}
+
 	async unmountInstance(instanceName: string, targetPath: string): Promise<MountResponse> {
 		return this.request<MountResponse>(`/instances/${encodeURIComponent(instanceName)}/mounts`, {
 			method: 'DELETE',
@@ -453,6 +579,8 @@ class ApiService {
 			const xhr = new XMLHttpRequest();
 			xhr.open('POST', `${API_BASE}/instances/${encodeURIComponent(instanceName)}/upload`);
 			xhr.withCredentials = true;
+			// Large bodies need the same budget as the server ReadTimeout.
+			xhr.timeout = UPLOAD_TIMEOUT_MS;
 			if (this.csrfToken) {
 				xhr.setRequestHeader('X-CSRF-Token', this.csrfToken);
 			}
@@ -488,6 +616,9 @@ class ApiService {
 			};
 			xhr.onerror = () => {
 				reject(new Error('Upload failed'));
+			};
+			xhr.ontimeout = () => {
+				reject(new Error('Upload timed out. Please try again.'));
 			};
 			xhr.send(formData);
 		});

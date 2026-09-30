@@ -138,6 +138,30 @@ describe('ApiService 403 handling', () => {
 		expect(redirectTarget.href).toBe('/unauthorized');
 	});
 
+	it('shares one CSRF refresh across concurrent mutating requests', async () => {
+		fetchMock
+			.mockResolvedValueOnce(
+				jsonResponse({ error: 'csrf_token_invalid', message: 'CSRF token is invalid' }, 403)
+			)
+			.mockResolvedValueOnce(
+				jsonResponse({ error: 'csrf_token_invalid', message: 'CSRF token is invalid' }, 403)
+			)
+			.mockResolvedValueOnce(jsonResponse({ csrf_token: 'shared-tok' }, 200))
+			.mockResolvedValueOnce(jsonResponse({ name: 'a' }, 200))
+			.mockResolvedValueOnce(jsonResponse({ name: 'b' }, 200));
+
+		const [a, b] = await Promise.all([
+			api.createInstance({ name: 'a' }),
+			api.createInstance({ name: 'b' })
+		]);
+
+		expect(a).toEqual({ name: 'a' });
+		expect(b).toEqual({ name: 'b' });
+		const tokenFetches = fetchCalls(fetchMock).filter((call) => call[0] === '/api/csrf/token');
+		expect(tokenFetches).toHaveLength(1);
+		expect(redirectTarget.href).toBe('');
+	});
+
 	it('uploadFile retries once after refreshing an expired token', async () => {
 		fetchMock
 			.mockResolvedValueOnce(

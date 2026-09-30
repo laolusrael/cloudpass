@@ -78,6 +78,7 @@ export interface Job {
 	type: string;
 	status: 'pending' | 'running' | 'completed' | 'failed';
 	instance_name?: string;
+	result?: string;
 	error?: string;
 	created_at: string;
 	updated_at: string;

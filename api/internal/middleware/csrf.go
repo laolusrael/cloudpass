@@ -16,6 +16,11 @@ const (
 	cSRFHeaderName = "X-CSRF-Token"
 	cSRFTokenLen   = 32
 	cSRFTokenTTL   = 24 * 60 * 60 // 24 hours
+	// Rotate the token only once it is past this fraction of its TTL, so
+	// concurrent tabs, SSE reconnects, and polling do not invalidate tokens
+	// held by in-flight pages. There is no login here and the session cookie
+	// is already a random secret, so fixation is not a concern.
+	cSRFRotateAfter = 3 * cSRFTokenTTL / 4
 )
 
 type csrfTokenEntry struct {
@@ -58,20 +63,49 @@ func (s *csrfStore) cleanup() {
 }
 
 func (s *csrfStore) Get(sessionKey string) string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	now := time.Now().Unix()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	entry, ok := s.tokens[sessionKey]
 	if !ok {
 		return ""
 	}
 
-	if time.Now().Unix() > entry.expires {
+	if now > entry.expires {
 		delete(s.tokens, sessionKey)
 		return ""
 	}
 
 	return entry.token
+}
+
+// ensureToken returns the live token for a session, minting one only when
+// the session has none, it expired, or it is past the rotation threshold.
+// Plain reads never rotate, so polling, SSE reconnects, and concurrent tabs
+// cannot invalidate tokens held by other pages.
+func (s *csrfStore) ensureToken(sessionKey string, generate func() (string, error)) (string, error) {
+	now := time.Now().Unix()
+
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	if entry, ok := s.tokens[sessionKey]; ok && now <= entry.expires {
+		if now-(entry.expires-cSRFTokenTTL) < cSRFRotateAfter {
+			return entry.token, nil
+		}
+	}
+
+	token, err := generate()
+	if err != nil {
+		return "", err
+	}
+	s.tokens[sessionKey] = &csrfTokenEntry{
+		token:   token,
+		expires: now + cSRFTokenTTL,
+	}
+	return token, nil
 }
 
 func (s *csrfStore) Set(sessionKey, token string) {
@@ -154,16 +188,17 @@ func NewCSRF(store *csrfStore) echo.MiddlewareFunc {
 				})
 			}
 
-			// Generate fresh token for safe methods
+			// Safe methods never invalidate a live token: mint one only when
+			// the session has none, it expired, or rotation is due. This keeps
+			// polling, SSE reconnects, and concurrent tabs from racing
+			// in-flight mutating requests.
 			if isSafeMethod(method) {
-				csrfToken, genErr := m.generateToken()
-				if genErr != nil {
+				if _, genErr := m.store.ensureToken(sessionKey, m.generateToken); genErr != nil {
 					log.Error().Err(genErr).Msg("failed to generate CSRF token")
 					return c.JSON(http.StatusInternalServerError, map[string]string{
 						"error": "internal_error",
 					})
 				}
-				m.store.Set(sessionKey, csrfToken)
 			}
 
 			// For mutating methods, validate token before processing

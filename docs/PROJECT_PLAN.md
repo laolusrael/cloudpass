@@ -152,13 +152,17 @@ http://localhost:8080/api
 | `GET` | `/jobs` | List all jobs | 1 |
 | `GET` | `/jobs/:id` | Get job status | 1 |
 | `POST` | `/instances/:name/export` | Export VM | 3 |
+| `POST` | `/instances/:name/export/async` | Export VM (background job) | 3 |
 | `POST` | `/instances/import` | Import VM | 3 |
+| `POST` | `/instances/import/async` | Import VM (background job) | 3 |
 | `POST` | `/instances/:name/snapshots` | Create snapshot | 3 |
+| `POST` | `/instances/:name/snapshots/async` | Create snapshot (background job) | 3 |
 | `GET` | `/instances/:name/snapshots` | List snapshots | 3 |
 | `POST` | `/instances/:name/snapshots/:id/restore` | Restore snapshot | 3 |
+| `POST` | `/instances/:name/snapshots/:id/restore/async` | Restore snapshot (background job) | 3 |
 | `POST` | `/instances/:name/mounts` | Mount host directory | 3 |
+| `POST` | `/instances/:name/mounts/async` | Mount host directory (background job) | 3 |
 | `DELETE` | `/instances/:name/mounts` | Unmount directory | 3 |
-| `POST` | `/instances/:name/upload` | Upload file (multipart, see 4.5) | 3 |
 | `PUT` | `/instances/:name/resources` | Update CPUs/memory/disk | 3 |
 
 ### 4.3 Data Models
@@ -250,7 +254,26 @@ Errors: `invalid_request` (400), `instance_not_running` (400), `not_found`
 (404), `conflict` (409), `multipass_error` (500), plus standard `csrf_*` (403)
 and `rate_limited` (429).
 
-### 4.6 WebSocket Protocol
+### 4.6 Long operations, jobs, and timeouts
+
+Minute-scale operations (mounts, snapshot create/restore, export, import)
+run as background jobs: the `/async` variants validate synchronously and
+answer `202 {"job": {...}}` (replays with the same `Idempotency-Key` answer
+200 with the original job). Clients track completion via `GET /jobs/:id` or
+the `GET /jobs/stream` SSE feed; results land in `job.result`, failures in
+`job.error`. Sync variants remain for scripts and fast cases.
+
+CSRF tokens are stable per session (minted when absent/expiring, never
+rotated by plain reads), so polling, SSE reconnects, and concurrent tabs
+cannot invalidate in-flight requests; the client additionally shares one
+token refresh across concurrent 403s.
+
+Server `ReadTimeout` is 10 minutes (100 MB uploads on slow links);
+`WriteTimeout` stays 30s because every slow response is a job. The UI bounds
+JSON requests at 60s and uploads at 10 minutes so stalled connections fail
+visibly instead of spinning forever.
+
+### 4.7 WebSocket Protocol
 
 **Connection**: `ws://localhost:8080/api/instances/:name/shell`
 

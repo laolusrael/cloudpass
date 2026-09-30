@@ -112,7 +112,7 @@ func main() {
 	healthHandler := handlers.NewHealthHandler()
 	configHandler := handlers.NewConfigHandler(cfgManager)
 	terminalHandler := websocket.NewTerminalHandler(mpClient, cfgManager.GetSSHKeyPath())
-	jobHandler := handlers.NewJobHandler(mpClient, cfgManager.GetMultipassTimeout(), jobStorage, eventHub)
+	jobHandler := handlers.NewJobHandler(mpClient, cfgManager.GetMultipassTimeout(), jobStorage, eventHub, cfgManager)
 	hostHandler := handlers.NewHostHandler(mpClient, cfgManager)
 
 	jobStorage.Cleanup(24 * time.Hour)
@@ -161,6 +161,7 @@ func main() {
 	api.POST("/instances", instanceHandler.Create)
 	api.POST("/instances/async", jobHandler.CreateInstanceAsync)
 	api.POST("/instances/import", instanceHandler.Import)
+	api.POST("/instances/import/async", jobHandler.ImportAsync)
 	api.GET("/instances/:name", instanceHandler.Get)
 	api.GET("/instances/:name/state", instanceHandler.GetState)
 	api.DELETE("/instances/:name", instanceHandler.Delete)
@@ -170,11 +171,15 @@ func main() {
 	api.POST("/instances/:name/suspend", instanceHandler.Suspend)
 	api.POST("/instances/:name/resume", instanceHandler.Resume)
 	api.POST("/instances/:name/export", instanceHandler.Export)
+	api.POST("/instances/:name/export/async", jobHandler.ExportAsync)
 	api.POST("/instances/:name/snapshots", instanceHandler.CreateSnapshot)
+	api.POST("/instances/:name/snapshots/async", jobHandler.CreateSnapshotAsync)
 	api.GET("/instances/:name/snapshots", instanceHandler.ListSnapshots)
 	api.POST("/instances/:name/snapshots/:id/restore", instanceHandler.RestoreSnapshot)
+	api.POST("/instances/:name/snapshots/:id/restore/async", jobHandler.RestoreSnapshotAsync)
 	api.DELETE("/instances/:name/snapshots/:id", instanceHandler.DeleteSnapshot)
 	api.POST("/instances/:name/mounts", instanceHandler.Mount)
+	api.POST("/instances/:name/mounts/async", jobHandler.CreateMountAsync)
 	api.DELETE("/instances/:name/mounts", instanceHandler.Unmount)
 	api.POST("/instances/:name/upload", instanceHandler.Upload)
 	api.PUT("/instances/:name/resources", instanceHandler.UpdateResources)
@@ -197,8 +202,13 @@ func main() {
 
 	addr := fmt.Sprintf("%s:%d", cfg.Server.Host, cfg.Server.Port)
 	srv := &http.Server{
-		Addr:         addr,
-		ReadTimeout:  30 * time.Second,
+		Addr: addr,
+		// Reads allow up to 10 minutes: 100 MB uploads on slow links need
+		// far more than a typical 30s budget. Slowloris exposure stays
+		// bounded by the IP allowlist, rate limiting, and the request
+		// body caps enforced per endpoint. Responses stay at 30s: every
+		// minute-scale operation runs as a background job (202 + poll).
+		ReadTimeout:  10 * time.Minute,
 		WriteTimeout: 30 * time.Second,
 	}
 

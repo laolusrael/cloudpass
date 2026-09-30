@@ -6,6 +6,7 @@
 	import type { Instance, HostInfo, UpdateResourcesRequest } from '$lib/types';
 	import { notifications } from '$lib/stores/notifications';
 	import { validateSelectedFile, formatFileSize } from '$lib/validation/upload';
+	import { waitForJob } from '$lib/utils/job-poller';
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Badge from '$lib/components/Badge.svelte';
@@ -118,9 +119,14 @@
 
 	async function handleExport() {
 		if (!instance) return;
+		const name = instance.name;
 		try {
-			const result = await api.exportInstance(instance.name);
-			alert(`Instance exported to: ${result.image_path}`);
+			const job = await api.exportInstanceAsync(name, undefined, {
+				idempotencyKey: crypto.randomUUID()
+			});
+			notifications.info(`Export of "${name}" started — this can take a while.`);
+			const result = await waitForJob(job.id);
+			notifications.success(`Instance exported to: ${result || 'image file'}`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to export';
 		}
@@ -131,7 +137,11 @@
 		if (!imagePath) return;
 		const name = prompt('Enter instance name (optional):');
 		try {
-			await api.importInstance({ image_path: imagePath, name: name || undefined });
+			await api.importInstanceAsync(
+				{ image_path: imagePath, name: name || undefined },
+				{ idempotencyKey: crypto.randomUUID() }
+			);
+			notifications.info('Import started — you will be notified when ready.');
 			goto('/');
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to import';
@@ -165,14 +175,26 @@
 		mounting = true;
 		mountError = null;
 		try {
-			await api.mountInstance(instance.name, {
-				source_path: source,
-				target_path: target,
-				mount_type: mountType,
-				uid_map: mountUidMap.trim() || undefined,
-				gid_map: mountGidMap.trim() || undefined
-			});
+			const job = await api.mountInstanceAsync(
+				instance.name,
+				{
+					source_path: source,
+					target_path: target,
+					mount_type: mountType,
+					uid_map: mountUidMap.trim() || undefined,
+					gid_map: mountGidMap.trim() || undefined
+				},
+				{ idempotencyKey: crypto.randomUUID() }
+			);
 			closeMountModal();
+			notifications.info(`Mount of ${source} started — this can take a few minutes.`);
+			try {
+				await waitForJob(job.id);
+			} catch (e) {
+				// The modal is closed: surface background failures on the page.
+				error = e instanceof Error ? e.message : 'Mount failed';
+				return;
+			}
 			notifications.success(`Mounted ${source} to ${target}`);
 			await loadInstance();
 		} catch (e) {

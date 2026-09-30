@@ -17,8 +17,10 @@ class FakeXHR {
 	responseText = '';
 	statusText = '';
 	responseHeaders: Record<string, string> = {};
+	timeout = 0;
 	onload: (() => void) | null = null;
 	onerror: (() => void) | null = null;
+	ontimeout: (() => void) | null = null;
 	sentBody: unknown = null;
 	method = '';
 	url = '';
@@ -53,6 +55,10 @@ class FakeXHR {
 
 	failNetwork(): void {
 		this.onerror?.();
+	}
+
+	expire(): void {
+		this.ontimeout?.();
 	}
 
 	emitProgress(loaded: number, total: number): void {
@@ -226,5 +232,14 @@ describe('ApiService uploadFileWithProgress', () => {
 
 		FakeXHR.instances[0].failNetwork();
 		await expect(pending).rejects.toThrow('Upload failed');
+	});
+
+	it('sets a generous timeout and rejects on expiry', async () => {
+		const file = new File(['data'], 'seed.txt', { type: 'text/plain' });
+		const pending = api.uploadFileWithProgress('web-1', file);
+
+		expect(FakeXHR.instances[0].timeout).toBe(10 * 60 * 1000);
+		FakeXHR.instances[0].expire();
+		await expect(pending).rejects.toThrow('Upload timed out');
 	});
 });
