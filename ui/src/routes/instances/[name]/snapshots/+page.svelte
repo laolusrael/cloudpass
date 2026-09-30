@@ -2,7 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { api } from '$lib/services/api';
-	import type { Snapshot, InstanceState, SnapshotResponse } from '$lib/types';
+	import type { Snapshot, InstanceStateResponse, SnapshotResponse } from '$lib/types';
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
@@ -17,12 +17,12 @@
 	let snapshotName = $state('');
 	let snapshotComment = $state('');
 
-	let instanceState = $state<InstanceState | null>(null);
+	let instanceState = $state<InstanceStateResponse | null>(null);
 	let showStopModal = $state(false);
 	let showSuccessModal = $state(false);
 	let successResponse = $state<SnapshotResponse | null>(null);
 
-	const name = $derived($page.params.name);
+	const name = $derived($page.params.name ?? '');
 
 	async function loadSnapshots() {
 		loading = true;

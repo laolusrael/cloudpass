@@ -22,3 +22,26 @@ export function formatFileSize(bytes: number): string {
 	if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
 	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
+
+/**
+ * Validate the Settings upload fields before saving. Mirrors the backend
+ * `ValidateUploadSettings` rules; the server remains authoritative.
+ * Returns an error message, or null when valid.
+ */
+export function validateUploadSettings(maxSizeMB: unknown, defaultPath: string): string | null {
+	if (
+		typeof maxSizeMB !== 'number' ||
+		!Number.isInteger(maxSizeMB) ||
+		maxSizeMB < 1 ||
+		maxSizeMB > 1024
+	) {
+		return 'Max file size must be a whole number between 1 and 1024 MB.';
+	}
+	if (!defaultPath.startsWith('/')) {
+		return 'Default upload path must be an absolute path.';
+	}
+	if (defaultPath.split('/').includes('..')) {
+		return 'Default upload path must not contain ..';
+	}
+	return null;
+}

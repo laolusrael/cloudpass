@@ -80,6 +80,37 @@ type ComponentLevels struct {
 	Websocket string `yaml:"websocket"`
 }
 
+// ValidateUploadDefaultPath checks a guest-absolute POSIX path for use as
+// the upload default directory. Guests are always Linux, so this uses slash
+// semantics even when the server runs on Windows.
+func ValidateUploadDefaultPath(path string) error {
+	if path == "" {
+		return fmt.Errorf("default_path is required")
+	}
+	if !strings.HasPrefix(path, "/") {
+		return fmt.Errorf("default_path must be an absolute path")
+	}
+	if strings.ContainsRune(path, '\x00') {
+		return fmt.Errorf("default_path contains invalid characters")
+	}
+	for _, seg := range strings.Split(path, "/") {
+		if seg == ".." {
+			return fmt.Errorf("default_path must not contain '..'")
+		}
+	}
+	return nil
+}
+
+// ValidateUploadSettings checks an upload size limit (1-1024 MB) together
+// with its default path. Shared by POST /config validation and Load-time
+// normalization so both enforce the same rules.
+func ValidateUploadSettings(maxFileSizeMB int, defaultPath string) error {
+	if maxFileSizeMB < 1 || maxFileSizeMB > 1024 {
+		return fmt.Errorf("max_file_size_mb must be between 1 and 1024")
+	}
+	return ValidateUploadDefaultPath(defaultPath)
+}
+
 var defaultConfig = Config{
 	Server: ServerConfig{
 		Host: "0.0.0.0",
@@ -257,6 +288,17 @@ func Load(path string) (*Config, error) {
 
 	if cfg.Multipass.SocketPath == "" {
 		cfg.Multipass.SocketPath = DetectSocketPath()
+	}
+
+	// Hand-edited config files bypass POST /config validation, so normalize
+	// invalid upload settings here with a warning instead of failing closed.
+	if cfg.Upload.MaxFileSizeMB < 1 || cfg.Upload.MaxFileSizeMB > 1024 {
+		fmt.Printf("Warning: invalid upload.max_file_size_mb %d, resetting to default %d\n", cfg.Upload.MaxFileSizeMB, defaultConfig.Upload.MaxFileSizeMB)
+		cfg.Upload.MaxFileSizeMB = defaultConfig.Upload.MaxFileSizeMB
+	}
+	if err := ValidateUploadDefaultPath(cfg.Upload.DefaultPath); err != nil {
+		fmt.Printf("Warning: invalid upload.default_path %q (%v), resetting to default %q\n", cfg.Upload.DefaultPath, err, defaultConfig.Upload.DefaultPath)
+		cfg.Upload.DefaultPath = defaultConfig.Upload.DefaultPath
 	}
 
 	if len(cfg.Security.AllowedIPs) == 0 {

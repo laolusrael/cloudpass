@@ -17,7 +17,7 @@
 
 	let name = $state('');
 	let image = $state('');
-	let cpus = $state(1);
+	let cpus = $state('1');
 	let memory = $state('1G');
 	let disk = $state('5G');
 	let network = $state('');
@@ -47,10 +47,11 @@
 
 	function handleSubmit(e: Event) {
 		e.preventDefault();
+		const cpusCount = Number(cpus);
 		onSubmit({
 			name,
 			image: image || undefined,
-			cpus: cpus || undefined,
+			cpus: cpus.trim() === '' || !Number.isFinite(cpusCount) ? undefined : cpusCount,
 			memory: memory || undefined,
 			disk: disk || undefined,
 			network: network || undefined

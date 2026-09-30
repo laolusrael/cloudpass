@@ -105,6 +105,12 @@ export type InstanceState =
 	| 'Deleting'
 	| 'Deleted';
 
+/** Shape of GET /instances/:name/state (backend models.InstanceState). */
+export interface InstanceStateResponse {
+	name: string;
+	state: string;
+}
+
 export interface Snapshot {
 	name: string;
 	instance: string;

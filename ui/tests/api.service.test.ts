@@ -54,7 +54,7 @@ describe('ApiService', () => {
 		];
 
 		for (const method of requiredMethods) {
-			expect(typeof (api as Record<string, unknown>)[method]).toBe('function');
+			expect(typeof (api as unknown as Record<string, unknown>)[method]).toBe('function');
 		}
 	});
 });

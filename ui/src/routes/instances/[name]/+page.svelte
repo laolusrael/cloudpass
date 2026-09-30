@@ -25,11 +25,12 @@
 	let uploading = $state(false);
 	let selectedFile = $state<File | null>(null);
 	let uploadError = $state<string | null>(null);
+	let uploadProgress = $state<number | null>(null);
 	let uploadMaxMB = $state(100);
 	let uploadDefaultPath = $state('/home/ubuntu/uploads');
 	let showEditResourcesModal = $state(false);
 
-	const name = $derived($page.params.name);
+	const name = $derived($page.params.name ?? '');
 
 	async function loadInstance() {
 		loading = true;
@@ -169,6 +170,7 @@
 		selectedFile = null;
 		uploadTargetPath = '';
 		uploadError = null;
+		uploadProgress = null;
 		showUploadModal = true;
 	}
 
@@ -177,6 +179,7 @@
 		selectedFile = null;
 		uploadTargetPath = '';
 		uploadError = null;
+		uploadProgress = null;
 	}
 
 	function handleFileSelected(e: Event) {
@@ -202,11 +205,15 @@
 		const file = selectedFile;
 		uploading = true;
 		uploadError = null;
+		uploadProgress = 0;
 		try {
-			const result = await api.uploadFile(
+			const result = await api.uploadFileWithProgress(
 				instance.name,
 				file,
-				uploadTargetPath.trim() || undefined
+				uploadTargetPath.trim() || undefined,
+				(loaded, total) => {
+					uploadProgress = total > 0 ? Math.round((loaded / total) * 100) : null;
+				}
 			);
 			closeUploadModal();
 			notifications.success(`File uploaded to ${result.path ?? file.name}`);
@@ -476,13 +483,22 @@
 					/>
 					<p class="mt-1 text-xs text-gray-500">
 						Empty uploads to {uploadDefaultPath}/&lt;filename&gt;. A trailing / targets a directory
-						(filename appended); otherwise a full file path is required.
+						(filename appended); otherwise a full file path is required. Uploading to an existing
+						path overwrites it.
 					</p>
 				</div>
 			</div>
 			{#if uploadError}
 				<div class="mt-4 p-3 bg-red-50 border border-red-200 rounded">
 					<p class="text-sm text-red-600">{uploadError}</p>
+				</div>
+			{/if}
+			{#if uploading && uploadProgress !== null}
+				<div class="mt-4">
+					<div class="w-full bg-gray-200 rounded h-2">
+						<div class="bg-gray-700 rounded h-2" style="width: {uploadProgress}%"></div>
+					</div>
+					<p class="mt-1 text-xs text-gray-500">Uploading... {uploadProgress}%</p>
 				</div>
 			{/if}
 			<div class="mt-6 flex justify-end gap-3">

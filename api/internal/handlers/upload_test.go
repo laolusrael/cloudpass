@@ -163,6 +163,31 @@ func TestUpload_TooLarge(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "file_too_large")
 }
 
+func TestUpload_RequestBodyCapExceeded(t *testing.T) {
+	oldOverhead := multipartOverheadBytes
+	multipartOverheadBytes = 50
+	t.Cleanup(func() { multipartOverheadBytes = oldOverhead })
+
+	mockClient := runningMock()
+	mgr := config.NewConfigManager(&config.Config{
+		Upload: config.UploadConfig{
+			MaxFileSizeMB: 1,
+			DefaultPath:   "/home/ubuntu",
+		},
+	}, "")
+	e := setupUploadRouter(mockClient, mgr)
+
+	// Content fits the 1 MB file limit, but multipart framing pushes the
+	// total body over the shrunken cap, exercising the MaxBytesReader path.
+	content := strings.Repeat("a", 1024*1024)
+	req := newUploadRequest(t, "/instances/test-vm/upload", "big.bin", content, "")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "file_too_large")
+}
+
 func TestUpload_RelativeTargetRejected(t *testing.T) {
 	mockClient := runningMock()
 	e := setupUploadRouter(mockClient, uploadTestConfig())
@@ -253,7 +278,8 @@ func TestResolveUploadTarget(t *testing.T) {
 		{"explicit file path", "/data/b.txt", "a.txt", "/home/ubuntu", "/data/b.txt", ""},
 		{"cleans redundant separators", "/data//b.txt", "a.txt", "/home/ubuntu", "/data/b.txt", ""},
 		{"relative rejected", "data/b.txt", "a.txt", "/home/ubuntu", "", "must be absolute"},
-		{"dotdot normalizes within root", "/../", "a.txt", "/home/ubuntu", "/a.txt", ""},
+		{"filesystem root rejected", "/", "a.txt", "/home/ubuntu", "", "must not be the filesystem root"},
+		{"dotdot collapsing to root rejected", "/../", "a.txt", "/home/ubuntu", "", "must not be the filesystem root"},
 		{"nul rejected", "/data/a\x00.txt", "a.txt", "/home/ubuntu", "", "invalid characters"},
 	}
 

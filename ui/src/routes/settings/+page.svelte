@@ -4,6 +4,7 @@
 	import { notifications } from '$lib/stores/notifications';
 	import type { ConfigResponse } from '$lib/types';
 	import { decideSave } from '$lib/validation/ip';
+	import { validateUploadSettings } from '$lib/validation/upload';
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -14,6 +15,7 @@
 	let saving = $state(false);
 	let error = $state<string | null>(null);
 	let ipError = $state<string | null>(null);
+	let uploadError = $state<string | null>(null);
 	let clientIp = $state('');
 	let confirmOpen = $state(false);
 	let confirmMessage = $state('');
@@ -44,6 +46,7 @@
 		loading = true;
 		error = null;
 		ipError = null;
+		uploadError = null;
 		try {
 			config = await api.getConfig();
 			serverHost = config.server.host;
@@ -80,11 +83,17 @@
 	async function handleSave() {
 		error = null;
 		ipError = null;
+		uploadError = null;
 
 		const ips = parseIpField();
 		const decision = decideSave(ips, clientIp);
 		if (decision.action === 'block') {
 			ipError = decision.error;
+			return;
+		}
+		const uploadProblem = validateUploadSettings(uploadMaxMB, uploadDefaultPath);
+		if (uploadProblem) {
+			uploadError = uploadProblem;
 			return;
 		}
 		if (decision.action === 'confirm') {
@@ -361,6 +370,9 @@
 							Absolute guest path used when no target path is given. Applies immediately, no restart
 							required.
 						</p>
+						{#if uploadError}
+							<p class="mt-1 text-xs text-red-600">{uploadError}</p>
+						{/if}
 					</div>
 				</div>
 			</Card>

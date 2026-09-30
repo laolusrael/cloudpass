@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { validateSelectedFile, formatFileSize } from '../src/lib/validation/upload';
+import {
+	validateSelectedFile,
+	formatFileSize,
+	validateUploadSettings
+} from '../src/lib/validation/upload';
 
 function sizedFile(size: number): File {
 	const blob = new Blob([new Uint8Array(size)]);
@@ -26,5 +30,23 @@ describe('formatFileSize', () => {
 		expect(formatFileSize(512)).toBe('512 B');
 		expect(formatFileSize(2048)).toBe('2.0 KB');
 		expect(formatFileSize(3 * 1024 * 1024)).toBe('3.0 MB');
+	});
+});
+
+describe('validateUploadSettings', () => {
+	it('accepts valid settings', () => {
+		expect(validateUploadSettings(100, '/home/ubuntu/uploads')).toBeNull();
+	});
+
+	it('rejects out-of-range sizes', () => {
+		expect(validateUploadSettings(0, '/x')).toContain('between 1 and 1024');
+		expect(validateUploadSettings(1025, '/x')).toContain('between 1 and 1024');
+		expect(validateUploadSettings(1.5, '/x')).toContain('whole number');
+		expect(validateUploadSettings(NaN, '/x')).toContain('whole number');
+	});
+
+	it('rejects bad default paths', () => {
+		expect(validateUploadSettings(100, 'relative')).toContain('absolute');
+		expect(validateUploadSettings(100, '/a/../b')).toContain('..');
 	});
 });
