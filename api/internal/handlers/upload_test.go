@@ -264,6 +264,31 @@ func TestUpload_TempFileRemoved(t *testing.T) {
 	assert.True(t, os.IsNotExist(err), "staging temp file should be removed")
 }
 
+func TestUpload_RespectsStagingDir(t *testing.T) {
+	staging := t.TempDir()
+	mgr := config.NewConfigManager(&config.Config{
+		Upload: config.UploadConfig{
+			MaxFileSizeMB: 100,
+			DefaultPath:   "/home/ubuntu",
+			StagingDir:    staging,
+		},
+	}, "")
+
+	mockClient := runningMock()
+	e := setupUploadRouter(mockClient, mgr)
+
+	req := newUploadRequest(t, "/instances/test-vm/upload", "test.txt", "hello", "")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	require.Equal(t, http.StatusCreated, rec.Code)
+	local, _ := mockClient.LastUpload()
+	require.NotEmpty(t, local)
+	assert.True(t, strings.HasPrefix(local, staging), "temp file should live in the staging dir, got %s", local)
+	_, err := os.Stat(local)
+	assert.True(t, os.IsNotExist(err), "staging temp file should be removed")
+}
+
 func TestResolveUploadTarget(t *testing.T) {
 	tests := []struct {
 		name     string

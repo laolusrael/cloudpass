@@ -777,12 +777,21 @@ func (h *InstanceHandler) Mount(c echo.Context) error {
 
 	mountType := req.MountType
 	if mountType == "" {
-		mountType = "classic"
+		env := h.cfgManager.GetEnvironment()
+		mountType = env.DefaultMountType()
+		logger.API.Load().Info().Str("ip", c.RealIP()).Str("name", name).Str("type", mountType).Str("driver", env.Driver).Msg("auto-selected mount type")
 	}
 	if mountType != "classic" && mountType != "native" {
 		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
 			Error:   "invalid_request",
 			Message: "mount_type must be classic or native",
+		})
+	}
+	if h.cfgManager.GetEnvironment().SnapDaemonInvisible(req.SourcePath) {
+		logger.API.Load().Warn().Str("ip", c.RealIP()).Str("source", req.SourcePath).Msg("mount source likely invisible to snap multipass")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: fmt.Sprintf("source path %q is likely invisible to snap-confined multipass (private /tmp); use a path under your home directory", req.SourcePath),
 		})
 	}
 	if err := validateMountIDMap(c, req.UIDMap, "uid_map"); err != nil {
@@ -1008,7 +1017,15 @@ func (h *InstanceHandler) Upload(c echo.Context) error {
 	}
 	defer src.Close()
 
-	tmpFile, err := os.CreateTemp("", "cloudpass-upload-*")
+	tmpDir := h.cfgManager.EffectiveStagingDir()
+	if err := os.MkdirAll(tmpDir, 0700); err != nil {
+		logger.API.Load().Error().Err(err).Str("dir", tmpDir).Msg("failed to prepare upload staging directory")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "upload_error",
+			Message: "failed to prepare upload staging",
+		})
+	}
+	tmpFile, err := os.CreateTemp(tmpDir, "cloudpass-upload-*")
 	if err != nil {
 		logger.API.Load().Error().Err(err).Msg("failed to create temp file")
 		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{

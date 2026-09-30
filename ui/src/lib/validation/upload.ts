@@ -28,7 +28,11 @@ export function formatFileSize(bytes: number): string {
  * `ValidateUploadSettings` rules; the server remains authoritative.
  * Returns an error message, or null when valid.
  */
-export function validateUploadSettings(maxSizeMB: unknown, defaultPath: string): string | null {
+export function validateUploadSettings(
+	maxSizeMB: unknown,
+	defaultPath: string,
+	stagingDir = ''
+): string | null {
 	if (
 		typeof maxSizeMB !== 'number' ||
 		!Number.isInteger(maxSizeMB) ||
@@ -42,6 +46,9 @@ export function validateUploadSettings(maxSizeMB: unknown, defaultPath: string):
 	}
 	if (defaultPath.split('/').includes('..')) {
 		return 'Default upload path must not contain ..';
+	}
+	if (stagingDir !== '' && !(stagingDir.startsWith('/') || /^[A-Za-z]:[\\/]/.test(stagingDir))) {
+		return 'Staging directory must be an absolute path.';
 	}
 	return null;
 }
