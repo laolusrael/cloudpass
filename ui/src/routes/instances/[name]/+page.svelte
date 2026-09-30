@@ -19,7 +19,11 @@
 	let showMountModal = $state(false);
 	let mountSourcePath = $state('');
 	let mountTargetPath = $state('');
+	let mountType = $state('classic');
+	let mountUidMap = $state('');
+	let mountGidMap = $state('');
 	let mounting = $state(false);
+	let mountError = $state<string | null>(null);
 	let showUploadModal = $state(false);
 	let uploadTargetPath = $state('');
 	let uploading = $state(false);
@@ -134,21 +138,45 @@
 		}
 	}
 
+	function openMountModal() {
+		mountSourcePath = '';
+		mountTargetPath = '';
+		mountType = 'classic';
+		mountUidMap = '';
+		mountGidMap = '';
+		mountError = null;
+		showMountModal = true;
+	}
+
+	function closeMountModal() {
+		showMountModal = false;
+		mountSourcePath = '';
+		mountTargetPath = '';
+		mountType = 'classic';
+		mountUidMap = '';
+		mountGidMap = '';
+		mountError = null;
+	}
+
 	async function handleMount() {
 		if (!instance || !mountSourcePath.trim() || !mountTargetPath.trim()) return;
+		const source = mountSourcePath.trim();
+		const target = mountTargetPath.trim();
 		mounting = true;
-		error = null;
+		mountError = null;
 		try {
 			await api.mountInstance(instance.name, {
-				source_path: mountSourcePath.trim(),
-				target_path: mountTargetPath.trim()
+				source_path: source,
+				target_path: target,
+				mount_type: mountType,
+				uid_map: mountUidMap.trim() || undefined,
+				gid_map: mountGidMap.trim() || undefined
 			});
-			showMountModal = false;
-			mountSourcePath = '';
-			mountTargetPath = '';
+			closeMountModal();
+			notifications.success(`Mounted ${source} to ${target}`);
 			await loadInstance();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to mount';
+			mountError = e instanceof Error ? e.message : 'Failed to mount';
 		} finally {
 			mounting = false;
 		}
@@ -361,7 +389,7 @@
 					{#if isRunning}
 						<div class="flex gap-2">
 							<Button variant="secondary" onclick={openUploadModal}>Upload File</Button>
-							<Button variant="secondary" onclick={() => (showMountModal = true)}>Add Mount</Button>
+							<Button variant="secondary" onclick={openMountModal}>Add Mount</Button>
 						</div>
 					{/if}
 				</div>
@@ -399,8 +427,8 @@
 		<div class="bg-white rounded-lg p-6 w-full max-w-md">
 			<h3 class="text-lg font-medium mb-4">Add Mount</h3>
 			<p class="text-sm text-gray-500 mb-4">
-				Enter the host path to mount into the instance. If the path does not exist, you will be
-				prompted to create it.
+				Map a host directory into the instance. The host path must be an existing absolute directory
+				(no ~ expansion).
 			</p>
 			<div class="space-y-4">
 				<div>
@@ -426,15 +454,66 @@
 						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
 						placeholder="/home/ubuntu/projects"
 					/>
+					<p class="mt-1 text-xs text-gray-500">
+						Created if missing; existing contents are overlaid, not deleted.
+					</p>
 				</div>
+				<div>
+					<label for="mount-type" class="block text-sm font-medium text-gray-700 mb-1">
+						Mount Type
+					</label>
+					<select
+						id="mount-type"
+						bind:value={mountType}
+						class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+					>
+						<option value="classic">Classic (SSHFS, works everywhere)</option>
+						<option value="native">Native (faster, Hyper-V/QEMU only)</option>
+					</select>
+				</div>
+				<div class="grid grid-cols-2 gap-4">
+					<div>
+						<label for="mount-uid" class="block text-sm font-medium text-gray-700 mb-1">
+							UID Map (optional)
+						</label>
+						<input
+							id="mount-uid"
+							type="text"
+							bind:value={mountUidMap}
+							class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+							placeholder="1000:1000"
+						/>
+					</div>
+					<div>
+						<label for="mount-gid" class="block text-sm font-medium text-gray-700 mb-1">
+							GID Map (optional)
+						</label>
+						<input
+							id="mount-gid"
+							type="text"
+							bind:value={mountGidMap}
+							class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+							placeholder="1000:1000"
+						/>
+					</div>
+				</div>
+				<p class="text-xs text-gray-500">
+					ID maps are host:instance pairs (e.g. 1000:1000). Leave empty for defaults.
+				</p>
 			</div>
-			{#if error}
+			<div class="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded">
+				<p class="text-xs text-yellow-800">
+					Mounted host directories are readable and writable from the instance. Only mount paths you
+					trust.
+				</p>
+			</div>
+			{#if mountError}
 				<div class="mt-4 p-3 bg-red-50 border border-red-200 rounded">
-					<p class="text-sm text-red-600">{error}</p>
+					<p class="text-sm text-red-600">{mountError}</p>
 				</div>
 			{/if}
 			<div class="mt-6 flex justify-end gap-3">
-				<Button variant="secondary" onclick={() => (showMountModal = false)}>Cancel</Button>
+				<Button variant="secondary" onclick={closeMountModal}>Cancel</Button>
 				<Button
 					variant="primary"
 					onclick={handleMount}

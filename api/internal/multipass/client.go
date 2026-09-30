@@ -37,7 +37,7 @@ type Client interface {
 	ListNetworks() ([]models.Network, error)
 	CreateNetwork(name string, mode string, mac string) error
 	DeleteNetwork(name string) error
-	MountInstance(instanceName string, sourcePath string, targetPath string) error
+	MountInstance(instanceName string, sourcePath string, targetPath string, opts MountOptions) error
 	UnmountInstance(instanceName string, targetPath string) error
 	UploadFile(instanceName string, localPath string, targetPath string) error
 	CreateSnapshot(instanceName string, snapshotName string, comment string) error
@@ -649,11 +649,64 @@ func (c *multipassClient) ListNetworks() ([]models.Network, error) {
 	return result.Networks, nil
 }
 
-func (c *multipassClient) MountInstance(instanceName string, sourcePath string, targetPath string) error {
-	if _, err := os.Stat(sourcePath); os.IsNotExist(err) {
+// MountOptions tunes a host-directory mount. Type is "classic" (SSHFS,
+// works on all backends) or "native" (hypervisor mounts, Hyper-V/QEMU
+// only); empty means classic, the multipass server default. UIDMap/GIDMap
+// are optional "host:instance" numeric mappings.
+type MountOptions struct {
+	Type   string
+	UIDMap string
+	GIDMap string
+}
+
+// validateIDMap checks an optional "host:instance" numeric ID mapping for
+// multipass --uid-map/--gid-map flags.
+func validateIDMap(flag, mapping string) error {
+	if mapping == "" {
+		return nil
+	}
+	parts := strings.Split(mapping, ":")
+	if len(parts) != 2 {
+		return fmt.Errorf("invalid %s %q: must be host:instance IDs", flag, mapping)
+	}
+	for _, part := range parts {
+		id, err := strconv.Atoi(part)
+		if err != nil || id < 0 {
+			return fmt.Errorf("invalid %s %q: must be host:instance IDs", flag, mapping)
+		}
+	}
+	return nil
+}
+
+func (c *multipassClient) MountInstance(instanceName string, sourcePath string, targetPath string, opts MountOptions) error {
+	if strings.HasPrefix(sourcePath, "~") {
+		return fmt.Errorf("source path %q must be absolute (shell ~ is not expanded)", sourcePath)
+	}
+	if !filepath.IsAbs(sourcePath) {
+		return fmt.Errorf("source path %q must be absolute", sourcePath)
+	}
+	info, err := os.Stat(sourcePath)
+	if os.IsNotExist(err) {
 		return fmt.Errorf("source path %q does not exist", sourcePath)
 	} else if err != nil {
 		return fmt.Errorf("cannot access source path %q: %w", sourcePath, err)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("source path %q is not a directory", sourcePath)
+	}
+
+	mountType := opts.Type
+	if mountType == "" {
+		mountType = "classic"
+	}
+	if mountType != "classic" && mountType != "native" {
+		return fmt.Errorf("invalid mount type %q: must be classic or native", opts.Type)
+	}
+	if err := validateIDMap("uid-map", opts.UIDMap); err != nil {
+		return err
+	}
+	if err := validateIDMap("gid-map", opts.GIDMap); err != nil {
+		return err
 	}
 
 	instance, err := c.GetInstance(instanceName)
@@ -667,24 +720,38 @@ func (c *multipassClient) MountInstance(instanceName string, sourcePath string, 
 		return fmt.Errorf("instance %q is not running (current state: %s)", instanceName, instance.State)
 	}
 
+	// Best-effort: multipass creates/overlays the target itself, so a mkdir
+	// failure must not block the mount — just record it for diagnostics.
 	if err := c.ensureTargetPath(instanceName, targetPath); err != nil {
-		return fmt.Errorf("failed to create target path: %w", err)
+		logger.Multipass.Load().Warn().
+			Err(err).
+			Str("instance", instanceName).
+			Str("target", targetPath).
+			Msg("pre-creating mount target failed, proceeding anyway")
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
-	var args []string
-	if runtime.GOOS == "linux" {
-		args = []string{"mount", "--type=native", sourcePath, instanceName + ":" + targetPath}
-	} else {
-		args = []string{"mount", sourcePath, instanceName + ":" + targetPath}
+	// Classic is the multipass server default, so only pass --type when the
+	// caller explicitly asked for native (keeps older servers working).
+	args := []string{"mount"}
+	if mountType == "native" {
+		args = append(args, "--type", "native")
 	}
+	if opts.UIDMap != "" {
+		args = append(args, "--uid-map", opts.UIDMap)
+	}
+	if opts.GIDMap != "" {
+		args = append(args, "--gid-map", opts.GIDMap)
+	}
+	args = append(args, sourcePath, instanceName+":"+targetPath)
 
 	logger.Multipass.Load().Info().
 		Str("instance", instanceName).
 		Str("source", sourcePath).
 		Str("target", targetPath).
+		Str("type", mountType).
 		Msg("mounting directory")
 
 	cmd := exec.CommandContext(ctx, "multipass", args...)
@@ -731,6 +798,14 @@ func (c *multipassClient) ensureTargetPath(instanceName string, targetPath strin
 }
 
 func (c *multipassClient) UnmountInstance(instanceName string, targetPath string) error {
+	instance, err := c.GetInstance(instanceName)
+	if err != nil {
+		return fmt.Errorf("failed to get instance: %w", err)
+	}
+	if instance == nil {
+		return fmt.Errorf("instance %q not found", instanceName)
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
 	defer cancel()
 
@@ -742,7 +817,7 @@ func (c *multipassClient) UnmountInstance(instanceName string, targetPath string
 		Msg("unmounting directory")
 
 	cmd := exec.CommandContext(ctx, "multipass", args...)
-	_, err := cmd.Output()
+	_, err = cmd.Output()
 	if err != nil {
 		logger.Multipass.Load().Error().
 			Err(err).

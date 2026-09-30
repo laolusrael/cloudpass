@@ -324,8 +324,14 @@ multipass mount [options] <source> <target>
 **Options:**
 - `-h, --help` - Displays help
 - `-v, --verbose` - Increase verbosity
+- `-t, --type <classic|native>` - Mount type. Classic (SSHFS, default) works on all backends; native uses hypervisor mounts (Hyper-V SMB, QEMU 9P) and fails elsewhere
 - `-u, --uid-map <host>:<instance>` - Map host UID to instance UID
 - `-g, --gid-map <host>:<instance>` - Map host GID to instance GID
+
+**Notes:**
+- Source must be an existing host directory (absolute path, no `~` expansion); the daemon must be able to see it (snap confinement can hide paths)
+- Target is created if missing; existing contents are overlaid, not deleted
+- Mounts persist across restarts; re-mounting an existing target fails with "already mounted"
 
 **Examples:**
 ```bash

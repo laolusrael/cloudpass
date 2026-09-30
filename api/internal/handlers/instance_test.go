@@ -595,6 +595,121 @@ func TestUnmount_MissingTargetPath(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "target_path is required")
 }
 
+func TestMount_SourceErrorIsBadRequestNotNotFound(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
+	mockClient.SetMountErr(errors.New(`source path "/nope" does not exist`))
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"source_path": "/nope", "target_path": "/home/ubuntu/projects"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "invalid_request")
+}
+
+func TestMount_AlreadyMountedIsConflict(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
+	mockClient.SetMountErr(errors.New(`"/home/ubuntu/projects" is already mounted in 'test-vm'`))
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "conflict")
+}
+
+func TestMount_InvalidTypeAndMaps(t *testing.T) {
+	tests := []struct {
+		name string
+		body string
+		want string
+	}{
+		{"bad type", `{"source_path": "/a", "target_path": "/b", "mount_type": "smb"}`, "mount_type must be classic or native"},
+		{"bad uid map", `{"source_path": "/a", "target_path": "/b", "uid_map": "abc"}`, "uid_map must be host:instance IDs"},
+		{"bad gid map", `{"source_path": "/a", "target_path": "/b", "gid_map": "1000"}`, "gid_map must be host:instance IDs"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			mockClient := multipass.NewMockClient()
+			mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
+
+			e := setupMountRouter(mockClient)
+
+			req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			rec := httptest.NewRecorder()
+			e.ServeHTTP(rec, req)
+
+			assert.Equal(t, http.StatusBadRequest, rec.Code)
+			assert.Contains(t, rec.Body.String(), tt.want)
+		})
+	}
+}
+
+func TestMount_PassesOptionsThrough(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects", "mount_type": "native", "uid_map": "1000:1000", "gid_map": "1000:1000"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusCreated, rec.Code)
+	source, target, opts := mockClient.LastMount()
+	assert.Equal(t, "/home/user/projects", source)
+	assert.Equal(t, "/home/ubuntu/projects", target)
+	assert.Equal(t, "native", opts.Type)
+	assert.Equal(t, "1000:1000", opts.UIDMap)
+	assert.Equal(t, "1000:1000", opts.GIDMap)
+}
+
+func TestMount_NotRunning(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped"}})
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects"}`
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "instance_not_running")
+}
+
+func TestUnmount_InstanceNotFound(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupMountRouter(mockClient)
+
+	body := `{"target_path": "/home/ubuntu/projects"}`
+	req := httptest.NewRequest(http.MethodDelete, "/instances/missing/mounts", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+	assert.Contains(t, rec.Body.String(), "not_found")
+}
+
 func TestUpdateResources_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})

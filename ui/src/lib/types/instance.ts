@@ -165,6 +165,9 @@ export interface InstanceExport {
 export interface MountRequest {
 	source_path: string;
 	target_path: string;
+	mount_type?: string;
+	uid_map?: string;
+	gid_map?: string;
 }
 
 export interface UnmountRequest {

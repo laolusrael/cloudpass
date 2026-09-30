@@ -222,7 +222,26 @@ Errors: `invalid_request` (400), `file_too_large` (400), `instance_not_running`
 (400), `not_found` (404), `upload_error`/`multipass_error` (500), plus standard
 `csrf_*` (403) and `rate_limited` (429).
 
-### 4.5 WebSocket Protocol
+### 4.5 Host Directory Mounts
+
+`POST /instances/:name/mounts` accepts JSON fields:
+
+| Field | Required | Description |
+|-------|----------|-------------|
+| `source_path` | Yes | Existing absolute host directory. Relative paths and `~` are rejected. Anyone with UI access can expose any host path — only mount paths you trust. |
+| `target_path` | Yes | Guest destination. Created if missing; existing contents are overlaid, not deleted. |
+| `mount_type` | No | `classic` (SSHFS, default, works on all backends) or `native` (Hyper-V/QEMU only). |
+| `uid_map` / `gid_map` | No | Optional `host:instance` numeric ID mappings. |
+
+The instance must be `Running`. Mounts persist across restarts; re-mounting an
+existing target returns `conflict` (409).
+
+Success: `201 {"message": "Directory mounted", "source": ..., "target": ...}`.
+Errors: `invalid_request` (400), `instance_not_running` (400), `not_found`
+(404), `conflict` (409), `multipass_error` (500), plus standard `csrf_*` (403)
+and `rate_limited` (429).
+
+### 4.6 WebSocket Protocol
 
 **Connection**: `ws://localhost:8080/api/instances/:name/shell`
 

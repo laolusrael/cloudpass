@@ -21,6 +21,11 @@ type MockClient struct {
 	uploadErr        error
 	lastUploadLocal  string
 	lastUploadTarget string
+	mountErr         error
+	unmountErr       error
+	lastMountSource  string
+	lastMountTarget  string
+	lastMountOpts    MountOptions
 }
 
 func (m *MockClient) SetListImagesErr(err error) {
@@ -182,6 +187,18 @@ func (m *MockClient) SetUploadErr(err error) {
 	m.uploadErr = err
 }
 
+func (m *MockClient) SetMountErr(err error) {
+	m.mountErr = err
+}
+
+func (m *MockClient) SetUnmountErr(err error) {
+	m.unmountErr = err
+}
+
+func (m *MockClient) LastMount() (sourcePath string, targetPath string, opts MountOptions) {
+	return m.lastMountSource, m.lastMountTarget, m.lastMountOpts
+}
+
 func (m *MockClient) LastUpload() (localPath string, targetPath string) {
 	return m.lastUploadLocal, m.lastUploadTarget
 }
@@ -202,11 +219,32 @@ func (m *MockClient) SetListNetworksErr(err error) {
 	m.listNetworksErr = err
 }
 
-func (m *MockClient) MountInstance(instanceName string, sourcePath string, targetPath string) error {
+func (m *MockClient) MountInstance(instanceName string, sourcePath string, targetPath string, opts MountOptions) error {
+	if m.mountErr != nil {
+		return m.mountErr
+	}
+	// Mirror the real client: unknown instances and non-running instances
+	// fail so handler error mapping stays covered by tests.
+	inst, err := m.GetInstance(instanceName)
+	if err != nil {
+		return err
+	}
+	if inst.State != "Running" {
+		return fmt.Errorf("instance %q is not running (current state: %s)", instanceName, inst.State)
+	}
+	m.lastMountSource = sourcePath
+	m.lastMountTarget = targetPath
+	m.lastMountOpts = opts
 	return nil
 }
 
 func (m *MockClient) UnmountInstance(instanceName string, targetPath string) error {
+	if m.unmountErr != nil {
+		return m.unmountErr
+	}
+	if _, err := m.GetInstance(instanceName); err != nil {
+		return err
+	}
 	return nil
 }
 
