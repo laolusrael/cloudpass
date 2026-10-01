@@ -21,6 +21,14 @@ echo ">>> Copying UI to embed directory..."
 mkdir -p api/internal/web/build
 cp -r ui/build/* api/internal/web/build/
 
+echo ">>> Verifying embedded UI assets..."
+# Fails the build if any file the UI produced is unreachable from the
+# embedded FS (e.g. go:embed silently excluding names starting with
+# "_" or "."). Without this, such a gap ships as a blank UI.
+cd api
+go test -count=1 -run 'TestEmbeddedAssetsComplete' ./internal/web/
+cd ..
+
 echo ">>> Building Go API..."
 cd api
 

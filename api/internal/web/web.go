@@ -12,8 +12,13 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
+// The all: prefix disables go:embed's silent exclusion of files
+// beginning with "_" or ".". Vite emits shared chunks named _<hash>.js,
+// and without all: those chunks are on disk but missing from the binary,
+// which surfaces in browsers as a blank page with a MIME-type error.
+//
 //go:embed build/index.html
-//go:embed build/_app
+//go:embed all:build/_app
 var staticFiles embed.FS
 
 func StaticHandlerWithFallback() echo.HandlerFunc {
