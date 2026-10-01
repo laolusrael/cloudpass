@@ -411,6 +411,23 @@ func TestExportAsync_OverwriteGuard(t *testing.T) {
 	assert.Contains(t, job.Error, "already exists")
 }
 
+func TestExportAsync_DeletedRejectedSync(t *testing.T) {
+	handler, _, mock := testJobHandler(t)
+	mock.SetInstances([]models.Instance{{Name: "test-vm", State: "Deleted"}})
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/export/async", strings.NewReader(`{}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("name")
+	c.SetParamValues("test-vm")
+
+	require.NoError(t, handler.ExportAsync(c))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "recover it before exporting")
+}
+
 func TestCompressDecompressRoundTrip(t *testing.T) {
 	dir := t.TempDir()
 	// Zero-heavy content like a thin VM disk.

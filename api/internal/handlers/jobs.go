@@ -520,6 +520,17 @@ func (h *JobHandler) ExportAsync(c echo.Context) error {
 		req = models.ExportInstanceRequest{}
 	}
 
+	// Fail fast like the sync path: exporting a recycle-bin instance is a
+	// validation error, not a background job.
+	if inst, err := h.mpClient.GetInstance(name); err == nil && inst != nil {
+		if strings.EqualFold(inst.State, "Deleted") {
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: fmt.Sprintf("instance %q is deleted; recover it before exporting", name),
+			})
+		}
+	}
+
 	job, replayed, err := h.startJob(c, "export", name, func(jobID string) {
 		h.runExport(jobID, name, req.OutputPath, req.Overwrite, req.Compress == nil || *req.Compress)
 	})

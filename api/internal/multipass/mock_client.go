@@ -2,6 +2,7 @@ package multipass
 
 import (
 	"fmt"
+	"strings"
 	"time"
 
 	"cloudpass/internal/models"
@@ -317,7 +318,7 @@ func (m *MockClient) DeleteSnapshot(instanceName string, snapshotName string) er
 
 func (m *MockClient) ExportInstance(instanceName string, outputPath string) (string, error) {
 	for _, inst := range m.instances {
-		if inst.Name == instanceName && inst.State == "Deleted" {
+		if inst.Name == instanceName && strings.EqualFold(inst.State, "Deleted") {
 			return "", fmt.Errorf("instance %q is deleted; recover it before exporting", instanceName)
 		}
 	}

@@ -486,7 +486,7 @@ func (h *InstanceHandler) Recover(c echo.Context) error {
 
 	err := h.client.RecoverInstance(name)
 	if err != nil {
-		if strings.Contains(err.Error(), "not found") {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "does not exist") {
 			logger.API.Load().Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",

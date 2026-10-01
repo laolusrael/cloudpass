@@ -524,8 +524,9 @@ func (c *multipassClient) RecoverInstance(name string) error {
 
 	logger.Multipass.Load().Info().Str("name", name).Msg("recovering instance")
 	cmd := exec.CommandContext(ctx, "multipass", "recover", name)
-	if out, err := cmd.Output(); err != nil {
-		if strings.Contains(string(out), "not found") || strings.Contains(err.Error(), "not found") {
+	if out, err := cmd.CombinedOutput(); err != nil {
+		// Multipass reports errors on stderr, which Output() would drop.
+		if strings.Contains(string(out), "not found") || strings.Contains(string(out), "does not exist") {
 			return fmt.Errorf("instance %q not found", name)
 		}
 		logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to recover instance")
@@ -1098,7 +1099,7 @@ func (c *multipassClient) ExportInstance(instanceName string, outputPath string)
 	if err != nil {
 		return "", err
 	}
-	if instance.State == "Deleted" {
+	if strings.EqualFold(instance.State, "Deleted") {
 		return "", fmt.Errorf("instance %q is deleted; recover it before exporting", instanceName)
 	}
 
