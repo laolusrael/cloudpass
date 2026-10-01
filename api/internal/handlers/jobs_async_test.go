@@ -67,8 +67,8 @@ func TestMountAsync_Completes(t *testing.T) {
 
 	assert.Equal(t, http.StatusAccepted, code)
 	assert.Equal(t, "mount", resp.Job.Type)
-	// The background worker may already have picked the job up.
-	assert.Contains(t, []models.JobStatus{models.JobStatusPending, models.JobStatusRunning}, resp.Job.Status)
+	// No intermediate status assertion: the worker may settle the shared job
+	// before the response is marshaled. Terminal state is asserted below.
 
 	job := waitForJobSettled(t, storage, resp.Job.ID)
 	assert.Equal(t, models.JobStatusCompleted, job.Status)
