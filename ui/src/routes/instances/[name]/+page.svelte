@@ -108,13 +108,28 @@
 
 	async function handleDelete() {
 		if (!instance) return;
-		if (confirm(`Delete instance "${instance.name}"?`)) {
+		if (
+			confirm(
+				`Delete instance "${instance.name}"? It moves to the recycle bin and stays recoverable until purged.`
+			)
+		) {
 			try {
 				await api.deleteInstance(instance.name);
 				goto('/');
 			} catch (e) {
 				error = e instanceof Error ? e.message : 'Failed to delete';
 			}
+		}
+	}
+
+	async function handleRecover() {
+		if (!instance) return;
+		try {
+			await api.recoverInstance(instance.name);
+			notifications.success(`Instance "${instance.name}" recovered.`);
+			await loadInstance();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to recover';
 		}
 	}
 
@@ -287,6 +302,7 @@
 
 	const isRunning = $derived(instance?.state === 'Running');
 	const isStopped = $derived(instance?.state === 'Stopped');
+	const isDeleted = $derived(instance?.state === 'Deleted');
 </script>
 
 <svelte:head>
@@ -305,30 +321,43 @@
 		<div class="flex gap-2">
 			<Button variant="secondary" onclick={loadInstance}>Refresh</Button>
 			{#if instance}
-				<a href="/instances/{name}/snapshots">
-					<Button variant="secondary">Snapshots</Button>
-				</a>
-				{#if isStopped && hostInfo}
-					<Button variant="secondary" onclick={() => (showEditResourcesModal = true)}
-						>Edit Resources</Button
-					>
-				{/if}
-				{#if isRunning}
-					<a href="/instances/{name}/terminal">
-						<Button variant="secondary">Terminal</Button>
+				{#if isDeleted}
+					<Button variant="primary" onclick={handleRecover}>Recover</Button>
+				{:else}
+					<a href="/instances/{name}/snapshots">
+						<Button variant="secondary">Snapshots</Button>
 					</a>
-					<Button variant="secondary" onclick={handleStop}>Stop</Button>
-					<Button variant="secondary" onclick={handleRestart}>Restart</Button>
-				{:else if isStopped}
-					<Button variant="primary" onclick={handleStart}>Start</Button>
+					{#if isStopped && hostInfo}
+						<Button variant="secondary" onclick={() => (showEditResourcesModal = true)}
+							>Edit Resources</Button
+						>
+					{/if}
+					{#if isRunning}
+						<a href="/instances/{name}/terminal">
+							<Button variant="secondary">Terminal</Button>
+						</a>
+						<Button variant="secondary" onclick={handleStop}>Stop</Button>
+						<Button variant="secondary" onclick={handleRestart}>Restart</Button>
+					{:else if isStopped}
+						<Button variant="primary" onclick={handleStart}>Start</Button>
+					{/if}
+					<Button variant="secondary" onclick={handleExport} disabled={exporting}>
+						{exporting ? 'Exporting...' : 'Export'}
+					</Button>
+					<Button variant="danger" onclick={handleDelete}>Delete</Button>
 				{/if}
-				<Button variant="secondary" onclick={handleExport} disabled={exporting}>
-					{exporting ? 'Exporting...' : 'Export'}
-				</Button>
-				<Button variant="danger" onclick={handleDelete}>Delete</Button>
 			{/if}
 		</div>
 	</div>
+
+	{#if isDeleted && instance}
+		<div class="bg-yellow-50 border border-yellow-200 rounded p-4">
+			<p class="text-sm text-yellow-800">
+				This instance is in the recycle bin. Recover it to use it again, or purge it permanently
+				from the Instances page. Exports run from recovered (stopped) instances.
+			</p>
+		</div>
+	{/if}
 
 	{#if error}
 		<div class="bg-red-50 border border-red-200 rounded p-4">

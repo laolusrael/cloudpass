@@ -72,11 +72,79 @@ func setupInstanceRouter(client multipass.Client) *echo.Echo {
 	e.DELETE("/instances/:name", handler.Delete)
 	e.POST("/instances/:name/suspend", handler.Suspend)
 	e.POST("/instances/:name/resume", handler.Resume)
+	e.POST("/instances/:name/recover", handler.Recover)
+	e.POST("/instances/purge", handler.Purge)
 	e.POST("/instances/:name/start", handler.Start)
 	e.POST("/instances/:name/stop", handler.Stop)
 	e.POST("/instances/:name/restart", handler.Restart)
 	e.PUT("/instances/:name/resources", handler.UpdateResources)
 	return e
+}
+
+func TestRecover_Success(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Deleted"}})
+
+	e := setupInstanceRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/recover", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "recovered")
+}
+
+func TestRecover_NotFound(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupInstanceRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/instances/missing/recover", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusNotFound, rec.Code)
+}
+
+func TestRecover_InvalidName(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupInstanceRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/instances/123invalid/recover", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+}
+
+func TestPurge_Success(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+
+	e := setupInstanceRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/instances/purge", nil)
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Body.String(), "purged")
+}
+
+func TestExport_DeletedRejected(t *testing.T) {
+	mockClient := multipass.NewMockClient()
+	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Deleted"}})
+
+	e := setupSnapshotRouter(mockClient)
+
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/export", strings.NewReader(`{}`))
+	req.Header.Set("Content-Type", "application/json")
+	rec := httptest.NewRecorder()
+	e.ServeHTTP(rec, req)
+
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "recover it before exporting")
 }
 
 func TestSuspend_Success(t *testing.T) {

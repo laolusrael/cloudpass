@@ -34,6 +34,8 @@ describe('ApiService', () => {
 			'startInstance',
 			'stopInstance',
 			'restartInstance',
+			'recoverInstance',
+			'purgeDeletedInstances',
 			'getImages',
 			'getNetworks',
 			'createNetwork',

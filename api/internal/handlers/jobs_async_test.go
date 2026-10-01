@@ -67,8 +67,8 @@ func TestMountAsync_Completes(t *testing.T) {
 
 	assert.Equal(t, http.StatusAccepted, code)
 	assert.Equal(t, "mount", resp.Job.Type)
-	// The background worker may already have picked the job up.
-	assert.Contains(t, []models.JobStatus{models.JobStatusPending, models.JobStatusRunning}, resp.Job.Status)
+	// No intermediate status assertion: the worker may settle the shared job
+	// before the response is marshaled. Terminal state is asserted below.
 
 	job := waitForJobSettled(t, storage, resp.Job.ID)
 	assert.Equal(t, models.JobStatusCompleted, job.Status)
@@ -409,6 +409,23 @@ func TestExportAsync_OverwriteGuard(t *testing.T) {
 	job := waitForJobSettled(t, storage, resp.Job.ID)
 	assert.Equal(t, models.JobStatusFailed, job.Status)
 	assert.Contains(t, job.Error, "already exists")
+}
+
+func TestExportAsync_DeletedRejectedSync(t *testing.T) {
+	handler, _, mock := testJobHandler(t)
+	mock.SetInstances([]models.Instance{{Name: "test-vm", State: "Deleted"}})
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/export/async", strings.NewReader(`{}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("name")
+	c.SetParamValues("test-vm")
+
+	require.NoError(t, handler.ExportAsync(c))
+	assert.Equal(t, http.StatusBadRequest, rec.Code)
+	assert.Contains(t, rec.Body.String(), "recover it before exporting")
 }
 
 func TestCompressDecompressRoundTrip(t *testing.T) {

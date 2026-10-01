@@ -303,6 +303,18 @@ class ApiService {
 		});
 	}
 
+	async recoverInstance(name: string): Promise<InstanceResponse> {
+		return this.request<InstanceResponse>(`/instances/${encodeURIComponent(name)}/recover`, {
+			method: 'POST'
+		});
+	}
+
+	async purgeDeletedInstances(): Promise<InstanceResponse> {
+		return this.request<InstanceResponse>('/instances/purge', {
+			method: 'POST'
+		});
+	}
+
 	async getImages(): Promise<ImageList> {
 		return this.request<ImageList>('/images');
 	}

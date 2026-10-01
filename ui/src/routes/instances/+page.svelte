@@ -66,13 +66,33 @@
 	}
 
 	async function handleDelete(name: string) {
-		if (confirm(`Are you sure you want to delete "${name}"?`)) {
+		if (
+			confirm(`Delete "${name}"? It moves to the recycle bin and stays recoverable until purged.`)
+		) {
 			try {
 				await instances.delete(name);
-				notifications.success(`Instance "${name}" deleted`);
+				notifications.success(`Instance "${name}" moved to the recycle bin`);
 			} catch (e) {
 				notifications.error(e instanceof Error ? e.message : 'Failed to delete');
 			}
+		}
+	}
+
+	const deletedCount = $derived($instances.filter((i) => i.state === 'Deleted').length);
+
+	async function handlePurge() {
+		if (deletedCount === 0) return;
+		const first = confirm(
+			`Permanently destroy ${deletedCount} deleted instance(s)? This cannot be undone.`
+		);
+		if (!first) return;
+		if (!confirm('Really purge? Deleted instances and their data will be gone forever.')) return;
+		try {
+			await api.purgeDeletedInstances();
+			notifications.success('Recycle bin purged');
+			await instances.refresh();
+		} catch (e) {
+			notifications.error(e instanceof Error ? e.message : 'Failed to purge');
 		}
 	}
 
@@ -158,6 +178,9 @@
 				}}>Refresh</Button
 			>
 			<Button variant="secondary" onclick={openImportModal}>Import</Button>
+			{#if deletedCount > 0}
+				<Button variant="danger" onclick={handlePurge}>Purge ({deletedCount})</Button>
+			{/if}
 			<Button variant="primary" onclick={() => (window.location.href = '/instances/new')}>
 				New Instance
 			</Button>

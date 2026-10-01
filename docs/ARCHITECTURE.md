@@ -109,6 +109,8 @@ http://localhost:8080/api
 | `POST` | `/instances/:name/restart` | Restart instance | Yes |
 | `POST` | `/instances/:name/suspend` | Suspend instance | Yes |
 | `POST` | `/instances/:name/resume` | Resume instance | Yes |
+| `POST` | `/instances/:name/recover` | Recover deleted instance | Yes |
+| `POST` | `/instances/purge` | Purge all deleted instances | Yes |
 
 #### Network Endpoints
 
@@ -920,6 +922,8 @@ WantedBy=multi-user.target
 | `/api/instances/:name/restart` | POST | Restart instance |
 | `/api/instances/:name/suspend` | POST | Suspend instance |
 | `/api/instances/:name/resume` | POST | Resume instance |
+| `/api/instances/:name/recover` | POST | Recover deleted instance |
+| `/api/instances/purge` | POST | Purge all deleted instances |
 | `/api/instances/:name/export` | POST | Export instance |
 | `/api/instances/import` | POST | Import instance |
 | `/api/instances/:name/snapshots` | GET/POST | List/create snapshots |

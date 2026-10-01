@@ -466,6 +466,61 @@ func (h *InstanceHandler) Resume(c echo.Context) error {
 	})
 }
 
+func (h *InstanceHandler) Recover(c echo.Context) error {
+	name := c.Param("name")
+	if name == "" {
+		logger.API.Load().Warn().Str("ip", c.RealIP()).Msg("instance name is required")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "instance name is required",
+		})
+	}
+
+	if err := validateInstanceName(name); err != nil {
+		logger.API.Load().Warn().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("invalid instance name")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: err.Error(),
+		})
+	}
+
+	err := h.client.RecoverInstance(name)
+	if err != nil {
+		if strings.Contains(err.Error(), "not found") || strings.Contains(err.Error(), "does not exist") {
+			logger.API.Load().Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
+			return c.JSON(http.StatusNotFound, models.ErrorResponse{
+				Error:   "not_found",
+				Message: err.Error(),
+			})
+		}
+		logger.API.Load().Error().Err(err).Str("ip", c.RealIP()).Str("name", name).Msg("failed to recover instance")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "multipass_error",
+			Message: err.Error(),
+		})
+	}
+
+	logger.API.Load().Info().Str("ip", c.RealIP()).Str("name", name).Msg("instance recovered")
+	return c.JSON(http.StatusOK, models.InstanceResponse{
+		Message: "Instance recovered",
+	})
+}
+
+func (h *InstanceHandler) Purge(c echo.Context) error {
+	if err := h.client.PurgeDeleted(); err != nil {
+		logger.API.Load().Error().Err(err).Str("ip", c.RealIP()).Msg("failed to purge deleted instances")
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "multipass_error",
+			Message: err.Error(),
+		})
+	}
+
+	logger.API.Load().Info().Str("ip", c.RealIP()).Msg("deleted instances purged")
+	return c.JSON(http.StatusOK, models.InstanceResponse{
+		Message: "Deleted instances purged permanently",
+	})
+}
+
 func (h *InstanceHandler) Export(c echo.Context) error {
 	name := c.Param("name")
 	if name == "" {
@@ -496,6 +551,13 @@ func (h *InstanceHandler) Export(c echo.Context) error {
 			logger.API.Load().Warn().Str("ip", c.RealIP()).Str("name", name).Msg("instance not found")
 			return c.JSON(http.StatusNotFound, models.ErrorResponse{
 				Error:   "not_found",
+				Message: err.Error(),
+			})
+		}
+		if strings.Contains(err.Error(), "is deleted") {
+			logger.API.Load().Warn().Str("ip", c.RealIP()).Str("name", name).Msg("export of deleted instance rejected")
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
 				Message: err.Error(),
 			})
 		}

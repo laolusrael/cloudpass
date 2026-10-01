@@ -67,31 +67,6 @@ func (s *JobStorage) load() error {
 	return nil
 }
 
-func (s *JobStorage) save() error {
-	s.mu.RLock()
-	jobs := make([]*models.Job, 0, len(s.jobs))
-	for _, job := range s.jobs {
-		jobs = append(jobs, job)
-	}
-	s.mu.RUnlock()
-
-	data, err := json.MarshalIndent(jobs, "", "  ")
-	if err != nil {
-		return err
-	}
-
-	tmpPath := s.filePath + ".tmp"
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		return err
-	}
-
-	if err := os.Rename(tmpPath, s.filePath); err != nil {
-		return err
-	}
-
-	return nil
-}
-
 func (s *JobStorage) Get(id string) (*models.Job, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -111,29 +86,55 @@ func (s *JobStorage) List() []*models.Job {
 }
 
 func (s *JobStorage) Set(job *models.Job) {
+	// Persist under the write lock: readers that observe the new state are
+	// guaranteed it is already on disk, so a crash cannot lose a reported
+	// terminal state and concurrent file cleanup cannot race an in-flight
+	// write.
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	s.jobs[job.ID] = job
 	if job.IdempotencyKey != "" {
 		s.idempotency[job.IdempotencyKey] = job.ID
 	}
-	s.mu.Unlock()
 
-	if err := s.save(); err != nil {
+	if err := s.saveLocked(); err != nil {
 		logger.API.Load().Error().Err(err).Str("job_id", job.ID).Msg("failed to save job")
 	}
 }
 
+// saveLocked persists all jobs; the caller must hold the write lock.
+func (s *JobStorage) saveLocked() error {
+	jobs := make([]*models.Job, 0, len(s.jobs))
+	for _, job := range s.jobs {
+		jobs = append(jobs, job)
+	}
+
+	data, err := json.MarshalIndent(jobs, "", "  ")
+	if err != nil {
+		return err
+	}
+
+	tmpPath := s.filePath + ".tmp"
+	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
+		return err
+	}
+
+	return os.Rename(tmpPath, s.filePath)
+}
+
 func (s *JobStorage) Delete(id string) {
 	s.mu.Lock()
+	defer s.mu.Unlock()
+
 	if job, ok := s.jobs[id]; ok && job.IdempotencyKey != "" {
 		if mapped, ok := s.idempotency[job.IdempotencyKey]; ok && mapped == id {
 			delete(s.idempotency, job.IdempotencyKey)
 		}
 	}
 	delete(s.jobs, id)
-	s.mu.Unlock()
 
-	if err := s.save(); err != nil {
+	if err := s.saveLocked(); err != nil {
 		logger.API.Load().Error().Err(err).Str("job_id", id).Msg("failed to delete job")
 	}
 }
@@ -171,14 +172,13 @@ func (s *JobStorage) Cleanup(maxAge time.Duration) int {
 		}
 	}
 
-	s.mu.Unlock()
-
 	if deleted > 0 {
-		if err := s.save(); err != nil {
+		if err := s.saveLocked(); err != nil {
 			logger.API.Load().Error().Err(err).Msg("failed to save after cleanup")
 		}
 		logger.API.Load().Info().Int("deleted", deleted).Msg("cleaned up old jobs")
 	}
+	s.mu.Unlock()
 
 	return deleted
 }
