@@ -4,6 +4,7 @@
 	import { api } from '$lib/services/api';
 	import { notifications } from '$lib/stores/notifications';
 	import { waitForJob } from '$lib/utils/job-poller';
+	import { generateIdempotencyKey } from '$lib/utils/id';
 	import type { Snapshot } from '$lib/types';
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
@@ -49,7 +50,7 @@
 			const job = await api.createSnapshotAsync(
 				name,
 				{ name: requestedName, comment: snapshotComment },
-				{ idempotencyKey: crypto.randomUUID() }
+				{ idempotencyKey: generateIdempotencyKey() }
 			);
 			notifications.info(
 				`Snapshot "${requestedName}" started — the instance may stop and restart.`
@@ -71,7 +72,7 @@
 		error = null;
 		try {
 			const job = await api.restoreSnapshotAsync(name, snapshotNameVal, {
-				idempotencyKey: crypto.randomUUID()
+				idempotencyKey: generateIdempotencyKey()
 			});
 			notifications.info(`Restoring snapshot "${snapshotNameVal}" — this can take a while.`);
 			await waitForJob(job.id);
