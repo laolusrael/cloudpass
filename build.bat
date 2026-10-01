@@ -22,6 +22,12 @@ echo >>> Copying UI to embed directory...
 if not exist "api\internal\web\build" mkdir "api\internal\web\build"
 xcopy /E /Q /Y ui\build\* api\internal\web\build\
 
+echo >>> Verifying embedded UI assets...
+cd api
+go test -count=1 -run "TestEmbeddedAssetsComplete" .\internal\web\
+if errorlevel 1 exit /b 1
+cd ..
+
 echo >>> Building Go API...
 cd api
 
