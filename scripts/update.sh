@@ -115,7 +115,13 @@ verify_ui_assets() {
         fail "Asset $chunk returned HTTP $code (expected 200)"
         return 1
     fi
-    ctype=$(curl -sI --max-time 10 "http://localhost:$port$chunk" 2>/dev/null | grep -i '^content-type:' | tr -d '\r')
+    # NOTE: headers are fetched with GET (-D -), not HEAD (-I): the
+    # server registers GET-only routes and answers HEAD with 405.
+    ctype=$(curl -s -D - -o /dev/null --max-time 10 "http://localhost:$port$chunk" 2>/dev/null | grep -i '^content-type:' | tr -d '\r')
+    if [ -z "$ctype" ]; then
+        fail "Asset $chunk returned HTTP $code but no readable content-type"
+        return 1
+    fi
     if echo "$ctype" | grep -qi 'text/html'; then
         fail "Asset $chunk served as text/html (stale deployment: chunk missing from the running binary)"
         return 1

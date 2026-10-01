@@ -136,8 +136,12 @@ if command -v curl >/dev/null 2>&1; then
         echo -e "${GREEN}[ok]${NC} Service is healthy (/api/health)"
         CHUNK=$(curl -sf --max-time 10 "http://localhost:$PORT/" 2>/dev/null | grep -o '/_app/immutable/[^"]*\.js' | head -n 1)
         if [ -n "$CHUNK" ]; then
-            CTYPE=$(curl -sI --max-time 10 "http://localhost:$PORT$CHUNK" 2>/dev/null | grep -i '^content-type:' | tr -d '\r')
-            if echo "$CTYPE" | grep -qi 'text/html'; then
+            # NOTE: headers via GET (-D -), not HEAD (-I): the server
+            # registers GET-only routes and answers HEAD with 405.
+            CTYPE=$(curl -s -D - -o /dev/null --max-time 10 "http://localhost:$PORT$CHUNK" 2>/dev/null | grep -i '^content-type:' | tr -d '\r')
+            if [ -z "$CTYPE" ]; then
+                VERIFY_FAILED="UI asset $CHUNK returned no readable content-type"
+            elif echo "$CTYPE" | grep -qi 'text/html'; then
                 VERIFY_FAILED="UI asset $CHUNK served as text/html (broken UI build embedded in the binary)"
             else
                 echo -e "${GREEN}[ok]${NC} UI assets served correctly"
