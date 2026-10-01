@@ -141,6 +141,7 @@ func TestNetworkHandler_List_Enrichment(t *testing.T) {
 	})
 	store := mustNetworkUsage(t)
 	store.RecordInstanceNetwork("web-1", "br01")
+	store.RecordCreatedNetwork("br01")
 
 	e := echo.New()
 	handler := NewNetworkHandler(mockClient, store)
@@ -155,7 +156,9 @@ func TestNetworkHandler_List_Enrichment(t *testing.T) {
 	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &list))
 	require.Len(t, list.Networks, 2)
 	assert.Equal(t, []string{"web-1"}, list.Networks[0].UsedBy)
+	assert.True(t, list.Networks[0].Managed)
 	assert.Empty(t, list.Networks[1].UsedBy)
+	assert.False(t, list.Networks[1].Managed)
 	assert.Equal(t, []string{"old"}, list.UnverifiedInstances)
 }
 

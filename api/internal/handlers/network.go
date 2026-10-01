@@ -58,6 +58,7 @@ func (h *NetworkHandler) List(c echo.Context) error {
 			usedBy, unverified := h.netUsage.UsageReport(instances)
 			for i := range resp.Networks {
 				resp.Networks[i].UsedBy = usedBy[resp.Networks[i].Name]
+				resp.Networks[i].Managed = h.netUsage.IsManaged(resp.Networks[i].Name)
 			}
 			resp.UnverifiedInstances = unverified
 		}

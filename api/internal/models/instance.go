@@ -84,6 +84,10 @@ type Network struct {
 	// UsedBy names instances CloudPass knows are attached to this network
 	// (tracked at launch or set manually). Empty means no known users.
 	UsedBy []string `json:"used_by,omitempty"`
+	// Managed is true when CloudPass created (or claimed) this network.
+	// Only managed networks are offered for deletion; host, docker, and
+	// daemon bridges stay undeletable by construction.
+	Managed bool `json:"managed"`
 }
 
 type NetworkList struct {
