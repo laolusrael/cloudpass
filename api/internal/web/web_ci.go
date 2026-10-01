@@ -12,10 +12,6 @@ import (
 
 var staticFiles fs.FS = nil
 
-func StaticHandler() echo.HandlerFunc {
-	return echo.WrapHandler(http.FileServer(http.FS(staticFiles)))
-}
-
 func StaticHandlerWithFallback() echo.HandlerFunc {
 	return echo.WrapHandler(http.FileServer(http.FS(staticFiles)))
 }
