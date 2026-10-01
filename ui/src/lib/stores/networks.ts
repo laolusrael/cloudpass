@@ -10,7 +10,7 @@ function createNetworksStore() {
 		async refresh() {
 			const { api } = await import('$lib/services/api');
 			const data = await api.getNetworks();
-			set(data.networks);
+			set(data.networks ?? []);
 		},
 		add(network: Network) {
 			update((networks) => [...networks, network]);

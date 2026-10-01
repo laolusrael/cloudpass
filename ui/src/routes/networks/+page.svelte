@@ -19,7 +19,7 @@
 		loading = true;
 		try {
 			const data = await api.getNetworks();
-			networks = data.networks;
+			networks = data.networks ?? [];
 		} catch (e) {
 			notifications.error(e instanceof Error ? e.message : 'Failed to load networks');
 		} finally {
