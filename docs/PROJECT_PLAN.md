@@ -153,8 +153,9 @@ http://localhost:8080/api
 | `GET` | `/jobs/:id` | Get job status | 1 |
 | `POST` | `/instances/:name/export` | Export VM | 3 |
 | `POST` | `/instances/:name/export/async` | Export VM (background job) | 3 |
+| `GET` | `/instances/:name/export/download` | Download exported image (`?job_id=`, `?sidecar=true`) | 3 |
 | `POST` | `/instances/import` | Import VM | 3 |
-| `POST` | `/instances/import/async` | Import VM (background job) | 3 |
+| `POST` | `/instances/import/async` | Import VM (background job, JSON or multipart) | 3 |
 | `POST` | `/instances/:name/snapshots` | Create snapshot | 3 |
 | `POST` | `/instances/:name/snapshots/async` | Create snapshot (background job) | 3 |
 | `GET` | `/instances/:name/snapshots` | List snapshots | 3 |
@@ -273,7 +274,28 @@ Server `ReadTimeout` is 10 minutes (100 MB uploads on slow links);
 JSON requests at 60s and uploads at 10 minutes so stalled connections fail
 visibly instead of spinning forever.
 
-### 4.7 WebSocket Protocol
+### 4.7 VM Image Transfer (export/import)
+
+Export produces a portable image plus a JSON sidecar (`<file>.json`: driver,
+arch, specs, compression); both download from
+`GET /instances/:name/export/download?job_id=` (browser anchor, no CSRF header
+needed on GET). Images compress with zstd on export (`.img.zst`, default on)
+and transparently decompress on import (magic-byte sniffed, never trusted by
+extension). Staged artifacts live under the effective staging dir, are
+removed after download, and otherwise swept after 24h TTL (50 GB quota,
+oldest-first) by a purely reactive sweeper — no background daemon.
+
+Import accepts a browser upload (multipart `file` + optional `name`, capped by
+`upload.max_image_size_mb`, default 10 GB) or a server-local `image_path`.
+Duplicate instance names are rejected with 409 naming the existing instance
+and its state; uploading to `name.img` suggests that name when none is given.
+
+Portability contract: same driver + arch imports directly (`multipass launch`
+of the image). Cross-driver (QEMU qcow2 ↔ Hyper-V vhdx) needs `qemu-img`
+conversion — out of scope; the sidecar records the source driver so the server
+warns before launching.
+
+### 4.8 WebSocket Protocol
 
 **Connection**: `ws://localhost:8080/api/instances/:name/shell`
 

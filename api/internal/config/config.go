@@ -29,9 +29,10 @@ type ServerConfig struct {
 }
 
 type UploadConfig struct {
-	MaxFileSizeMB int    `yaml:"max_file_size_mb"`
-	DefaultPath   string `yaml:"default_path"`
-	StagingDir    string `yaml:"staging_dir"`
+	MaxFileSizeMB  int    `yaml:"max_file_size_mb"`
+	MaxImageSizeMB int    `yaml:"max_image_size_mb"`
+	DefaultPath    string `yaml:"default_path"`
+	StagingDir     string `yaml:"staging_dir"`
 }
 
 type SecurityConfig struct {
@@ -112,6 +113,14 @@ func ValidateUploadSettings(maxFileSizeMB int, defaultPath string) error {
 	return ValidateUploadDefaultPath(defaultPath)
 }
 
+// ValidateImageSizeMB checks a VM image upload cap (1 MB - 100 GB).
+func ValidateImageSizeMB(maxImageSizeMB int) error {
+	if maxImageSizeMB < 1 || maxImageSizeMB > 102400 {
+		return fmt.Errorf("max_image_size_mb must be between 1 and 102400")
+	}
+	return nil
+}
+
 // ValidateUploadStagingDir checks an optional host-side staging directory:
 // empty means auto-select, otherwise it must be absolute (host semantics).
 func ValidateUploadStagingDir(dir string) error {
@@ -145,8 +154,9 @@ var defaultConfig = Config{
 		PassphraseEnv:     "",
 	},
 	Upload: UploadConfig{
-		MaxFileSizeMB: 100,
-		DefaultPath:   "/home/ubuntu/uploads",
+		MaxFileSizeMB:  100,
+		MaxImageSizeMB: 10240,
+		DefaultPath:    "/home/ubuntu/uploads",
 	},
 	Logging: LoggingConfig{
 		Level:  "info",
@@ -308,6 +318,10 @@ func Load(path string) (*Config, error) {
 	if cfg.Upload.MaxFileSizeMB < 1 || cfg.Upload.MaxFileSizeMB > 1024 {
 		fmt.Printf("Warning: invalid upload.max_file_size_mb %d, resetting to default %d\n", cfg.Upload.MaxFileSizeMB, defaultConfig.Upload.MaxFileSizeMB)
 		cfg.Upload.MaxFileSizeMB = defaultConfig.Upload.MaxFileSizeMB
+	}
+	if err := ValidateImageSizeMB(cfg.Upload.MaxImageSizeMB); err != nil {
+		fmt.Printf("Warning: invalid upload.max_image_size_mb %d, resetting to default %d\n", cfg.Upload.MaxImageSizeMB, defaultConfig.Upload.MaxImageSizeMB)
+		cfg.Upload.MaxImageSizeMB = defaultConfig.Upload.MaxImageSizeMB
 	}
 	if err := ValidateUploadDefaultPath(cfg.Upload.DefaultPath); err != nil {
 		fmt.Printf("Warning: invalid upload.default_path %q (%v), resetting to default %q\n", cfg.Upload.DefaultPath, err, defaultConfig.Upload.DefaultPath)

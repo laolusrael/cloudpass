@@ -51,6 +51,8 @@ describe('ApiService', () => {
 			'restoreSnapshotAsync',
 			'exportInstanceAsync',
 			'importInstanceAsync',
+			'importInstanceFromFile',
+			'exportInstanceDownloadUrl',
 			'unmountInstance',
 			'uploadFile',
 			'getConfig',

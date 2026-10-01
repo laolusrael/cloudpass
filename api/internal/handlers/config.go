@@ -53,9 +53,10 @@ func (h *ConfigHandler) Get(c echo.Context) error {
 			SSHKeyPath:        cfg.Multipass.SSHKeyPath,
 		},
 		Upload: models.UploadConfigResponse{
-			MaxFileSizeMB: cfg.Upload.MaxFileSizeMB,
-			DefaultPath:   cfg.Upload.DefaultPath,
-			StagingDir:    cfg.Upload.StagingDir,
+			MaxFileSizeMB:  cfg.Upload.MaxFileSizeMB,
+			MaxImageSizeMB: cfg.Upload.MaxImageSizeMB,
+			DefaultPath:    cfg.Upload.DefaultPath,
+			StagingDir:     cfg.Upload.StagingDir,
 		},
 		Environment: models.EnvironmentResponse{
 			MultipassMode:       env.MultipassMode,
@@ -168,10 +169,14 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 
 	if req.Upload != nil {
 		maxMB := cfg.Upload.MaxFileSizeMB
+		maxImgMB := cfg.Upload.MaxImageSizeMB
 		defPath := cfg.Upload.DefaultPath
 		staging := cfg.Upload.StagingDir
 		if req.Upload.MaxFileSizeMB != nil {
 			maxMB = *req.Upload.MaxFileSizeMB
+		}
+		if req.Upload.MaxImageSizeMB != nil {
+			maxImgMB = *req.Upload.MaxImageSizeMB
 		}
 		if req.Upload.DefaultPath != "" {
 			defPath = req.Upload.DefaultPath
@@ -191,8 +196,15 @@ func (h *ConfigHandler) Update(c echo.Context) error {
 				Message: err.Error(),
 			})
 		}
-		if maxMB != cfg.Upload.MaxFileSizeMB || defPath != cfg.Upload.DefaultPath || staging != cfg.Upload.StagingDir {
+		if err := config.ValidateImageSizeMB(maxImgMB); err != nil {
+			return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+				Error:   "invalid_request",
+				Message: err.Error(),
+			})
+		}
+		if maxMB != cfg.Upload.MaxFileSizeMB || maxImgMB != cfg.Upload.MaxImageSizeMB || defPath != cfg.Upload.DefaultPath || staging != cfg.Upload.StagingDir {
 			cfg.Upload.MaxFileSizeMB = maxMB
+			cfg.Upload.MaxImageSizeMB = maxImgMB
 			cfg.Upload.DefaultPath = defPath
 			cfg.Upload.StagingDir = staging
 			modified = true

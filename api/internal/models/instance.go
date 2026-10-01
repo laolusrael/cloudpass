@@ -134,6 +134,22 @@ type RestoreSnapshotRequest struct {
 type ExportInstanceRequest struct {
 	OutputPath string `json:"output_path,omitempty"`
 	Format     string `json:"format,omitempty"`
+	Overwrite  bool   `json:"overwrite,omitempty"`
+	// Compress toggles zstd compression (default on when nil).
+	Compress *bool `json:"compress,omitempty"`
+}
+
+// ImageSidecar travels next to an exported image (<file>.json) so any
+// CloudPass server can verify compatibility before importing.
+type ImageSidecar struct {
+	Instance   string `json:"instance"`
+	Driver     string `json:"driver,omitempty"`
+	Arch       string `json:"arch,omitempty"`
+	CPUs       int    `json:"cpus,omitempty"`
+	Memory     string `json:"memory,omitempty"`
+	Disk       string `json:"disk,omitempty"`
+	Compressed string `json:"compressed,omitempty"`
+	CreatedAt  string `json:"created_at"`
 }
 
 type ImportInstanceRequest struct {
@@ -195,9 +211,10 @@ type MultipassConfigResponse struct {
 }
 
 type UploadConfigResponse struct {
-	MaxFileSizeMB int    `json:"max_file_size_mb"`
-	DefaultPath   string `json:"default_path"`
-	StagingDir    string `json:"staging_dir,omitempty"`
+	MaxFileSizeMB  int    `json:"max_file_size_mb"`
+	MaxImageSizeMB int    `json:"max_image_size_mb"`
+	DefaultPath    string `json:"default_path"`
+	StagingDir     string `json:"staging_dir,omitempty"`
 }
 
 type LoggingConfigResponse struct {
@@ -242,9 +259,10 @@ type MultipassUpdateRequest struct {
 }
 
 type UploadUpdateRequest struct {
-	MaxFileSizeMB *int   `json:"max_file_size_mb,omitempty"`
-	DefaultPath   string `json:"default_path,omitempty"`
-	StagingDir    string `json:"staging_dir,omitempty"`
+	MaxFileSizeMB  *int   `json:"max_file_size_mb,omitempty"`
+	MaxImageSizeMB *int   `json:"max_image_size_mb,omitempty"`
+	DefaultPath    string `json:"default_path,omitempty"`
+	StagingDir     string `json:"staging_dir,omitempty"`
 }
 
 // EnvironmentResponse describes the detected host environment. Read-only:

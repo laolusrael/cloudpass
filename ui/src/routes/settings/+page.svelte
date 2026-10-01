@@ -4,7 +4,7 @@
 	import { notifications } from '$lib/stores/notifications';
 	import type { ConfigResponse } from '$lib/types';
 	import { decideSave } from '$lib/validation/ip';
-	import { validateUploadSettings } from '$lib/validation/upload';
+	import { validateUploadSettings, validateImageSizeMB } from '$lib/validation/upload';
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Modal from '$lib/components/Modal.svelte';
@@ -30,6 +30,7 @@
 	let timeoutSec = $state(0);
 	let sshKeyPath = $state('');
 	let uploadMaxMB = $state(0);
+	let uploadMaxImageMB = $state(0);
 	let uploadDefaultPath = $state('');
 	let uploadStagingDir = $state('');
 	let uploadStagingEffective = $state('');
@@ -63,6 +64,7 @@
 			timeoutSec = config.multipass.default_timeout_seconds;
 			sshKeyPath = config.multipass.ssh_key_path;
 			uploadMaxMB = config.upload.max_file_size_mb;
+			uploadMaxImageMB = config.upload.max_image_size_mb;
 			uploadDefaultPath = config.upload.default_path;
 			uploadStagingDir = config.upload.staging_dir ?? '';
 			uploadStagingEffective = config.environment.staging_dir_effective;
@@ -99,7 +101,9 @@
 			ipError = decision.error;
 			return;
 		}
-		const uploadProblem = validateUploadSettings(uploadMaxMB, uploadDefaultPath, uploadStagingDir);
+		const uploadProblem =
+			validateUploadSettings(uploadMaxMB, uploadDefaultPath, uploadStagingDir) ??
+			validateImageSizeMB(uploadMaxImageMB);
 		if (uploadProblem) {
 			uploadError = uploadProblem;
 			return;
@@ -149,6 +153,7 @@
 				},
 				upload: {
 					max_file_size_mb: uploadMaxMB,
+					max_image_size_mb: uploadMaxImageMB,
 					default_path: uploadDefaultPath,
 					staging_dir: uploadStagingDir.trim() || undefined
 				},
@@ -363,6 +368,23 @@
 							class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
 							placeholder="100"
 						/>
+					</div>
+					<div>
+						<label for="upload-max-image-mb" class="block text-sm font-medium text-gray-700 mb-1">
+							Max Image Size (MB)
+						</label>
+						<input
+							id="upload-max-image-mb"
+							type="number"
+							min="1"
+							max="102400"
+							bind:value={uploadMaxImageMB}
+							class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-gray-500"
+							placeholder="10240"
+						/>
+						<p class="mt-1 text-xs text-gray-500">
+							Cap for browser-uploaded VM images (import). Large uploads can take a while.
+						</p>
 					</div>
 					<div>
 						<label for="upload-default-path" class="block text-sm font-medium text-gray-700 mb-1">
