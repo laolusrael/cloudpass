@@ -7,6 +7,7 @@
 	import { notifications } from '$lib/stores/notifications';
 	import { validateSelectedFile, formatFileSize } from '$lib/validation/upload';
 	import { waitForJob } from '$lib/utils/job-poller';
+	import { generateIdempotencyKey } from '$lib/utils/id';
 	import Card from '$lib/components/Card.svelte';
 	import Button from '$lib/components/Button.svelte';
 	import Badge from '$lib/components/Badge.svelte';
@@ -122,7 +123,7 @@
 		const name = instance.name;
 		try {
 			const job = await api.exportInstanceAsync(name, undefined, {
-				idempotencyKey: crypto.randomUUID()
+				idempotencyKey: generateIdempotencyKey()
 			});
 			notifications.info(`Export of "${name}" started — this can take a while.`);
 			const result = await waitForJob(job.id);
@@ -139,7 +140,7 @@
 		try {
 			await api.importInstanceAsync(
 				{ image_path: imagePath, name: name || undefined },
-				{ idempotencyKey: crypto.randomUUID() }
+				{ idempotencyKey: generateIdempotencyKey() }
 			);
 			notifications.info('Import started — you will be notified when ready.');
 			goto('/');
@@ -184,7 +185,7 @@
 					uid_map: mountUidMap.trim() || undefined,
 					gid_map: mountGidMap.trim() || undefined
 				},
-				{ idempotencyKey: crypto.randomUUID() }
+				{ idempotencyKey: generateIdempotencyKey() }
 			);
 			closeMountModal();
 			notifications.info(`Mount of ${source} started — this can take a few minutes.`);

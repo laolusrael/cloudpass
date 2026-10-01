@@ -1,6 +1,7 @@
 import { writable, derived } from 'svelte/store';
 import type { Instance } from '$lib/types';
 import { api, RateLimitedError } from '$lib/services/api';
+import { generateIdempotencyKey } from '$lib/utils/id';
 
 const STORED_NOTIFICATION_KEY = 'cloudpass_pending_notifications';
 const MAX_JOB_POLL_ATTEMPTS = 180; // 180 * 2s = 6 minutes timeout
@@ -213,7 +214,7 @@ function createInstancesStore() {
 			// One key per user-initiated attempt: automatic retries of this
 			// attempt are safe (server dedupes); a deliberate user retry
 			// generates a fresh key via a fresh createAsync call.
-			const idempotencyKey = crypto.randomUUID();
+			const idempotencyKey = generateIdempotencyKey();
 
 			loading.set(true);
 			error.set(null);
