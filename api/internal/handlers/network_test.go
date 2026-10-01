@@ -13,12 +13,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setupNetworkRouter(client multipass.Client) *echo.Echo {
+func setupNetworkRouter(t *testing.T, client multipass.Client) *echo.Echo {
+	t.Helper()
 	e := echo.New()
-	handler := NewNetworkHandler(client)
+	handler := NewNetworkHandler(client, mustNetworkUsage(t))
 	e.POST("/networks", handler.Create)
 	e.DELETE("/networks/:name", handler.Delete)
 	e.GET("/networks", handler.List)
+	e.POST("/networks/:name/claim", handler.ClaimNetwork)
+	e.DELETE("/networks/:name/claim", handler.UnclaimNetwork)
 	return e
 }
 
@@ -28,7 +31,7 @@ func TestNetworkHandler_List_Success(t *testing.T) {
 		{Name: "test-net", Type: "bridge", IPv4: "10.0.0.1"},
 	})
 
-	e := setupNetworkRouter(mockClient)
+	e := setupNetworkRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodGet, "/networks", nil)
 	rec := httptest.NewRecorder()
@@ -42,7 +45,7 @@ func TestNetworkHandler_List_Error(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetListNetworksErr(assert.AnError)
 
-	e := setupNetworkRouter(mockClient)
+	e := setupNetworkRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodGet, "/networks", nil)
 	rec := httptest.NewRecorder()
@@ -54,7 +57,7 @@ func TestNetworkHandler_List_Error(t *testing.T) {
 func TestNetworkHandler_Create_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupNetworkRouter(mockClient)
+	e := setupNetworkRouter(t, mockClient)
 
 	body := `{"name": "my-network"}`
 	req := httptest.NewRequest(http.MethodPost, "/networks", strings.NewReader(body))
@@ -69,7 +72,7 @@ func TestNetworkHandler_Create_Success(t *testing.T) {
 func TestNetworkHandler_Create_EmptyName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupNetworkRouter(mockClient)
+	e := setupNetworkRouter(t, mockClient)
 
 	body := `{"name": ""}`
 	req := httptest.NewRequest(http.MethodPost, "/networks", strings.NewReader(body))
@@ -84,7 +87,7 @@ func TestNetworkHandler_Create_EmptyName(t *testing.T) {
 func TestNetworkHandler_Create_InvalidBody(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupNetworkRouter(mockClient)
+	e := setupNetworkRouter(t, mockClient)
 
 	body := `{"invalid`
 	req := httptest.NewRequest(http.MethodPost, "/networks", strings.NewReader(body))
@@ -99,7 +102,7 @@ func TestNetworkHandler_Create_Error(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetCreateNetworkErr(assert.AnError)
 
-	e := setupNetworkRouter(mockClient)
+	e := setupNetworkRouter(t, mockClient)
 
 	body := `{"name": "my-network"}`
 	req := httptest.NewRequest(http.MethodPost, "/networks", strings.NewReader(body))
@@ -113,7 +116,7 @@ func TestNetworkHandler_Create_Error(t *testing.T) {
 func TestNetworkHandler_Create_WithModeAndMAC(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupNetworkRouter(mockClient)
+	e := setupNetworkRouter(t, mockClient)
 
 	body := `{"name": "my-network", "mode": "manual", "mac": "aa:bb:cc:dd:ee:ff"}`
 	req := httptest.NewRequest(http.MethodPost, "/networks", strings.NewReader(body))
@@ -127,7 +130,7 @@ func TestNetworkHandler_Create_WithModeAndMAC(t *testing.T) {
 func TestNetworkHandler_Delete_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupNetworkRouter(mockClient)
+	e := setupNetworkRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodDelete, "/networks/test-net", nil)
 	rec := httptest.NewRecorder()
@@ -141,7 +144,7 @@ func TestNetworkHandler_Delete_Error(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetDeleteNetworkErr(assert.AnError)
 
-	e := setupNetworkRouter(mockClient)
+	e := setupNetworkRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodDelete, "/networks/test-net", nil)
 	rec := httptest.NewRecorder()
@@ -154,7 +157,7 @@ func TestNetworkHandler_Delete_EmptyName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
 	e := echo.New()
-	handler := NewNetworkHandler(mockClient)
+	handler := NewNetworkHandler(mockClient, mustNetworkUsage(t))
 	e.DELETE("/networks/:name", handler.Delete)
 
 	req := httptest.NewRequest(http.MethodDelete, "/networks/", nil)

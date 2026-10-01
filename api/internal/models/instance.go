@@ -81,16 +81,45 @@ type Network struct {
 	Type        string `json:"type"`
 	IPv4        string `json:"ipv4,omitempty"`
 	Description string `json:"description,omitempty"`
+	// UsedBy names instances CloudPass knows are attached to this network
+	// (tracked at launch or set manually). Empty means no known users.
+	UsedBy []string `json:"used_by,omitempty"`
 }
 
 type NetworkList struct {
 	Networks []Network `json:"networks"`
+	// UnverifiedInstances names instances whose network attachments are
+	// unknown (created before tracking began, created outside CloudPass,
+	// or stopped/with extra interfaces so nothing can be inferred).
+	// Deleting any network while this is non-empty deserves a warning.
+	UnverifiedInstances []string `json:"unverified_instances,omitempty"`
 }
 
 type CreateNetworkRequest struct {
 	Name string `json:"name"`
 	Mode string `json:"mode,omitempty"`
 	MAC  string `json:"mac,omitempty"`
+}
+
+// SetInstanceNetworkRequest records (or clears, when empty) which
+// multipass network an instance uses. Metadata only: it never touches
+// the instance itself, since Multipass configures networks at launch.
+type SetInstanceNetworkRequest struct {
+	Network string `json:"network,omitempty"`
+}
+
+type InstanceNetworkResponse struct {
+	Name     string `json:"name"`
+	Network  string `json:"network,omitempty"`
+	Verified bool   `json:"verified"`
+}
+
+// NetworkInUseResponse is the 409 body for deleting a network that has
+// confirmed users. The UI names the blocking instances from UsedBy.
+type NetworkInUseResponse struct {
+	Error   string   `json:"error"`
+	Message string   `json:"message"`
+	UsedBy  []string `json:"used_by"`
 }
 
 type HealthResponse struct {

@@ -20,9 +20,10 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func setupUploadRouter(client multipass.Client, mgr *config.ConfigManager) *echo.Echo {
+func setupUploadRouter(t *testing.T, client multipass.Client, mgr *config.ConfigManager) *echo.Echo {
+	t.Helper()
 	e := echo.New()
-	handler := NewInstanceHandler(client, mgr)
+	handler := NewInstanceHandler(client, mgr, mustNetworkUsage(t))
 	e.POST("/instances/:name/upload", handler.Upload)
 	return e
 }
@@ -65,7 +66,7 @@ func runningMock() *multipass.MockClient {
 
 func TestUpload_SuccessDefaultPath(t *testing.T) {
 	mockClient := runningMock()
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/test-vm/upload", "test.txt", "hello", "")
 	rec := httptest.NewRecorder()
@@ -80,7 +81,7 @@ func TestUpload_SuccessDefaultPath(t *testing.T) {
 
 func TestUpload_SuccessTrailingSlashAppendsFilename(t *testing.T) {
 	mockClient := runningMock()
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/test-vm/upload", "test.txt", "hello", "/data/")
 	rec := httptest.NewRecorder()
@@ -95,7 +96,7 @@ func TestUpload_SuccessTrailingSlashAppendsFilename(t *testing.T) {
 
 func TestUpload_SuccessExplicitFilePath(t *testing.T) {
 	mockClient := runningMock()
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/test-vm/upload", "test.txt", "hello", "/data/custom.txt")
 	rec := httptest.NewRecorder()
@@ -110,7 +111,7 @@ func TestUpload_SuccessExplicitFilePath(t *testing.T) {
 
 func TestUpload_StripsDirectoryFromFilename(t *testing.T) {
 	mockClient := runningMock()
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/test-vm/upload", "../evil.txt", "hello", "")
 	rec := httptest.NewRecorder()
@@ -122,7 +123,7 @@ func TestUpload_StripsDirectoryFromFilename(t *testing.T) {
 
 func TestUpload_MissingFile(t *testing.T) {
 	mockClient := runningMock()
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/test-vm/upload", "", "", "")
 	rec := httptest.NewRecorder()
@@ -134,7 +135,7 @@ func TestUpload_MissingFile(t *testing.T) {
 
 func TestUpload_EmptyFile(t *testing.T) {
 	mockClient := runningMock()
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/test-vm/upload", "empty.txt", "", "")
 	rec := httptest.NewRecorder()
@@ -152,7 +153,7 @@ func TestUpload_TooLarge(t *testing.T) {
 			DefaultPath:   "/home/ubuntu",
 		},
 	}, "")
-	e := setupUploadRouter(mockClient, mgr)
+	e := setupUploadRouter(t, mockClient, mgr)
 
 	big := strings.Repeat("a", 1024*1024+100)
 	req := newUploadRequest(t, "/instances/test-vm/upload", "big.bin", big, "")
@@ -175,7 +176,7 @@ func TestUpload_RequestBodyCapExceeded(t *testing.T) {
 			DefaultPath:   "/home/ubuntu",
 		},
 	}, "")
-	e := setupUploadRouter(mockClient, mgr)
+	e := setupUploadRouter(t, mockClient, mgr)
 
 	// Content fits the 1 MB file limit, but multipart framing pushes the
 	// total body over the shrunken cap, exercising the MaxBytesReader path.
@@ -190,7 +191,7 @@ func TestUpload_RequestBodyCapExceeded(t *testing.T) {
 
 func TestUpload_RelativeTargetRejected(t *testing.T) {
 	mockClient := runningMock()
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/test-vm/upload", "test.txt", "hello", "relative/path.txt")
 	rec := httptest.NewRecorder()
@@ -202,7 +203,7 @@ func TestUpload_RelativeTargetRejected(t *testing.T) {
 
 func TestUpload_InvalidInstanceName(t *testing.T) {
 	mockClient := runningMock()
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/123invalid/upload", "test.txt", "hello", "")
 	rec := httptest.NewRecorder()
@@ -213,7 +214,7 @@ func TestUpload_InvalidInstanceName(t *testing.T) {
 
 func TestUpload_InstanceNotFound(t *testing.T) {
 	mockClient := multipass.NewMockClient()
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/missing/upload", "test.txt", "hello", "")
 	rec := httptest.NewRecorder()
@@ -226,7 +227,7 @@ func TestUpload_InstanceNotFound(t *testing.T) {
 func TestUpload_NotRunning(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped"}})
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/test-vm/upload", "test.txt", "hello", "")
 	rec := httptest.NewRecorder()
@@ -239,7 +240,7 @@ func TestUpload_NotRunning(t *testing.T) {
 func TestUpload_MultipassError(t *testing.T) {
 	mockClient := runningMock()
 	mockClient.SetUploadErr(errors.New("transfer exploded"))
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/test-vm/upload", "test.txt", "hello", "")
 	rec := httptest.NewRecorder()
@@ -251,7 +252,7 @@ func TestUpload_MultipassError(t *testing.T) {
 
 func TestUpload_TempFileRemoved(t *testing.T) {
 	mockClient := runningMock()
-	e := setupUploadRouter(mockClient, uploadTestConfig())
+	e := setupUploadRouter(t, mockClient, uploadTestConfig())
 
 	req := newUploadRequest(t, "/instances/test-vm/upload", "test.txt", "hello", "")
 	rec := httptest.NewRecorder()
@@ -275,7 +276,7 @@ func TestUpload_RespectsStagingDir(t *testing.T) {
 	}, "")
 
 	mockClient := runningMock()
-	e := setupUploadRouter(mockClient, mgr)
+	e := setupUploadRouter(t, mockClient, mgr)
 
 	req := newUploadRequest(t, "/instances/test-vm/upload", "test.txt", "hello", "")
 	rec := httptest.NewRecorder()

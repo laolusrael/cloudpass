@@ -21,10 +21,11 @@ import (
 type InstanceHandler struct {
 	client     multipass.Client
 	cfgManager *config.ConfigManager
+	netUsage   *NetworkUsageStore
 }
 
-func NewInstanceHandler(client multipass.Client, cfgManager *config.ConfigManager) *InstanceHandler {
-	return &InstanceHandler{client: client, cfgManager: cfgManager}
+func NewInstanceHandler(client multipass.Client, cfgManager *config.ConfigManager, netUsage *NetworkUsageStore) *InstanceHandler {
+	return &InstanceHandler{client: client, cfgManager: cfgManager, netUsage: netUsage}
 }
 
 var instanceNameRegex = regexp.MustCompile(`^[a-z][a-z0-9-]*[a-z0-9]$`)
@@ -227,6 +228,10 @@ func (h *InstanceHandler) Create(c echo.Context) error {
 		})
 	}
 
+	if h.netUsage != nil {
+		h.netUsage.RecordInstanceNetwork(instance.Name, req.Network)
+	}
+
 	logger.API.Load().Info().Str("ip", c.RealIP()).Str("name", instance.Name).Msg("instance created")
 	return c.JSON(http.StatusCreated, instance)
 }
@@ -265,7 +270,82 @@ func (h *InstanceHandler) Delete(c echo.Context) error {
 	}
 
 	logger.API.Load().Info().Str("ip", c.RealIP()).Str("name", name).Msg("instance deleted")
+	if h.netUsage != nil {
+		h.netUsage.ClearInstanceNetwork(name)
+	}
 	return c.JSON(http.StatusOK, map[string]string{"name": name, "status": "deleted"})
+}
+
+// GetInstanceNetwork returns the recorded multipass network for an
+// instance. Verified is false when nothing was ever recorded (created
+// before tracking began or outside CloudPass).
+func (h *InstanceHandler) GetInstanceNetwork(c echo.Context) error {
+	name := c.Param("name")
+	if name == "" {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "instance name is required",
+		})
+	}
+
+	resp := models.InstanceNetworkResponse{Name: name}
+	if h.netUsage != nil {
+		if network, ok := h.netUsage.InstanceNetwork(name); ok {
+			resp.Network = network
+			resp.Verified = true
+		}
+	}
+	return c.JSON(http.StatusOK, resp)
+}
+
+// SetInstanceNetwork records or clears the multipass network an
+// instance uses. Metadata only: Multipass configures networks at
+// launch and offers no post-launch change, so this never touches the
+// instance. It lets users resolve unknown attachments (pre-tracking or
+// externally created instances) without recreating anything.
+func (h *InstanceHandler) SetInstanceNetwork(c echo.Context) error {
+	name := c.Param("name")
+	if name == "" {
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "instance name is required",
+		})
+	}
+
+	var req models.SetInstanceNetworkRequest
+	if err := c.Bind(&req); err != nil {
+		logger.API.Load().Warn().Err(err).Str("ip", c.RealIP()).Msg("invalid request body")
+		return c.JSON(http.StatusBadRequest, models.ErrorResponse{
+			Error:   "invalid_request",
+			Message: "invalid request body",
+		})
+	}
+
+	if _, err := h.client.GetInstance(name); err != nil {
+		return c.JSON(http.StatusNotFound, models.ErrorResponse{
+			Error:   "not_found",
+			Message: err.Error(),
+		})
+	}
+
+	if h.netUsage == nil {
+		return c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error:   "unavailable",
+			Message: "network usage tracking is not configured",
+		})
+	}
+
+	if req.Network == "" {
+		h.netUsage.ClearInstanceNetwork(name)
+	} else {
+		h.netUsage.RecordInstanceNetwork(name, req.Network)
+	}
+	logger.API.Load().Info().Str("ip", c.RealIP()).Str("name", name).Str("network", req.Network).Msg("instance network attribution updated")
+	return c.JSON(http.StatusOK, models.InstanceNetworkResponse{
+		Name:     name,
+		Network:  req.Network,
+		Verified: req.Network != "",
+	})
 }
 
 func (h *InstanceHandler) Start(c echo.Context) error {
