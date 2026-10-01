@@ -71,7 +71,16 @@ func (s *JobStorage) Get(id string) (*models.Job, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	job, ok := s.jobs[id]
-	return job, ok
+	if !ok {
+		return nil, false
+	}
+	// Return a copy: readers that observe a terminal state are guaranteed
+	// the persisting Set fully finished (Set holds the write lock across
+	// the map assign and the file write), so a worker's trailing file I/O
+	// can never race an observer or TempDir cleanup. Callers mutate the
+	// copy and persist via Set; the stored job is never aliased out.
+	cp := *job
+	return &cp, true
 }
 
 func (s *JobStorage) List() []*models.Job {
@@ -80,7 +89,8 @@ func (s *JobStorage) List() []*models.Job {
 
 	jobs := make([]*models.Job, 0, len(s.jobs))
 	for _, job := range s.jobs {
-		jobs = append(jobs, job)
+		cp := *job
+		jobs = append(jobs, &cp)
 	}
 	return jobs
 }
@@ -149,7 +159,11 @@ func (s *JobStorage) GetByIdempotencyKey(key string) (*models.Job, bool) {
 		return nil, false
 	}
 	job, ok := s.jobs[id]
-	return job, ok
+	if !ok {
+		return nil, false
+	}
+	cp := *job
+	return &cp, true
 }
 
 func (s *JobStorage) Cleanup(maxAge time.Duration) int {

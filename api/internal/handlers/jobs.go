@@ -909,6 +909,17 @@ func deriveInstanceName(filename string) string {
 	return name
 }
 
+// removeImportStaged deletes an import's decoded sibling and staged upload.
+// Empty paths are skipped; missing files are not errors.
+func removeImportStaged(decoded string, stagedUpload string) {
+	if decoded != "" {
+		_ = os.Remove(decoded)
+	}
+	if stagedUpload != "" {
+		_ = os.Remove(stagedUpload)
+	}
+}
+
 func (h *JobHandler) runImport(jobID string, req models.ImportInstanceRequest, stagedUpload string) {
 	if h.markRunning(jobID) == nil {
 		return
@@ -919,18 +930,21 @@ func (h *JobHandler) runImport(jobID string, req models.ImportInstanceRequest, s
 		var err error
 		decoded, err = decompressImage(h.cfgManager.EffectiveStagingDir(), req.ImagePath)
 		if err != nil {
+			removeImportStaged(decoded, stagedUpload)
 			h.failJob(jobID, fmt.Errorf("failed to decompress image: %w", err), "import decompression failed")
 			return
 		}
-		defer func() { _ = os.Remove(decoded) }()
 		launchPath = decoded
 	} else {
 		h.checkImageSidecar(req.ImagePath)
 	}
-	if stagedUpload != "" {
-		defer func() { _ = os.Remove(stagedUpload) }()
-	}
 	instance, err := h.mpClient.ImportInstance(launchPath, req.Name, req.CPUs, req.Memory, req.Disk)
+	// Remove-before-publish: the staged upload and any decoded sibling must
+	// be gone before the job turns terminal. Pollers treat a terminal state
+	// as "all side effects are done"; deferred removals running after
+	// completeJob lose that race, and trailing file writes also race
+	// TempDir cleanup in tests.
+	removeImportStaged(decoded, stagedUpload)
 	if err != nil {
 		h.failJob(jobID, err, "import job failed")
 		SweepArtifacts(h.cfgManager.EffectiveStagingDir())
@@ -1094,10 +1108,12 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 	job.Status = models.JobStatusCompleted
 	job.InstanceName = instance.Name
 	job.UpdatedAt = time.Now()
-	h.storage.Set(job)
+	// Record before the final Set: the usage file write must land before
+	// the terminal state is observable, never after.
 	if h.netUsage != nil {
 		h.netUsage.RecordInstanceNetwork(instance.Name, req.Network)
 	}
+	h.storage.Set(job)
 	if h.eventHub != nil {
 		h.eventHub.BroadcastJobUpdate(job)
 	}
