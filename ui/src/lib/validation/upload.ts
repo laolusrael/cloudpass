@@ -52,3 +52,18 @@ export function validateUploadSettings(
 	}
 	return null;
 }
+
+/**
+ * Validate the Settings image-size field. Mirrors backend ValidateImageSizeMB.
+ */
+export function validateImageSizeMB(maxImageSizeMB: unknown): string | null {
+	if (
+		typeof maxImageSizeMB !== 'number' ||
+		!Number.isInteger(maxImageSizeMB) ||
+		maxImageSizeMB < 1 ||
+		maxImageSizeMB > 102400
+	) {
+		return 'Max image size must be a whole number between 1 and 102400 MB.';
+	}
+	return null;
+}

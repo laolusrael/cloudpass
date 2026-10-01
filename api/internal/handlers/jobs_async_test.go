@@ -1,11 +1,18 @@
 package handlers
 
 import (
+	"bytes"
 	"encoding/json"
+	"io"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"cloudpass/internal/models"
 
@@ -169,7 +176,7 @@ func TestExportAsync_Completes(t *testing.T) {
 
 	code, resp := doAsync(t, handler, handler.ExportAsync, "/instances/test-vm/export/async",
 		map[string]string{"name": "test-vm"},
-		`{}`,
+		`{"compress": false}`,
 		"key-export-1")
 
 	assert.Equal(t, http.StatusAccepted, code)
@@ -211,6 +218,73 @@ func TestImportAsync_MissingImage(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "image_path is required")
 }
 
+func newImportUploadRequest(t *testing.T, url string, filename string, content string, fields map[string]string) *http.Request {
+	t.Helper()
+
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	if filename != "" {
+		fw, err := w.CreateFormFile("file", filename)
+		require.NoError(t, err)
+		_, err = io.WriteString(fw, content)
+		require.NoError(t, err)
+	}
+	for k, v := range fields {
+		require.NoError(t, w.WriteField(k, v))
+	}
+	require.NoError(t, w.Close())
+
+	req := httptest.NewRequest(http.MethodPost, url, &buf)
+	req.Header.Set("Content-Type", w.FormDataContentType())
+	return req
+}
+
+func TestImportAsync_MultipartStagesAndCleans(t *testing.T) {
+	handler, storage, mock := testJobHandler(t)
+
+	e := echo.New()
+	req := newImportUploadRequest(t, "/instances/import/async", "web-server.img", "fake-image", map[string]string{})
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler.ImportAsync(c))
+	assert.Equal(t, http.StatusAccepted, rec.Code)
+
+	var resp models.JobResponse
+	require.NoError(t, json.Unmarshal(rec.Body.Bytes(), &resp))
+	job := waitForJobSettled(t, storage, resp.Job.ID)
+	require.Equal(t, models.JobStatusCompleted, job.Status)
+	assert.Equal(t, "web-server", job.InstanceName)
+
+	staged := mock.LastImportPath()
+	require.NotEmpty(t, staged)
+	_, err := os.Stat(staged)
+	assert.True(t, os.IsNotExist(err), "staged upload should be removed after launch")
+}
+
+func TestImportAsync_DuplicateNameIsConflict(t *testing.T) {
+	handler, _, mock := testJobHandler(t)
+	mock.SetInstances([]models.Instance{{Name: "taken", State: "Stopped"}})
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodPost, "/instances/import/async", strings.NewReader(`{"image_path": "/images/base.img", "name": "taken"}`))
+	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+
+	require.NoError(t, handler.ImportAsync(c))
+	assert.Equal(t, http.StatusConflict, rec.Code)
+	assert.Contains(t, rec.Body.String(), "already exists")
+	assert.Contains(t, rec.Body.String(), "Stopped")
+}
+
+func TestDeriveInstanceName(t *testing.T) {
+	assert.Equal(t, "web-server", deriveInstanceName("web-server.img"))
+	assert.Equal(t, "myvm", deriveInstanceName("My_VM.qcow2"))
+	assert.Equal(t, "", deriveInstanceName("!!!.img"))
+	assert.Equal(t, "", deriveInstanceName(".img"))
+}
+
 func TestAsyncJob_FailureRecorded(t *testing.T) {
 	handler, storage, mock := testJobHandler(t)
 	mock.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
@@ -224,4 +298,145 @@ func TestAsyncJob_FailureRecorded(t *testing.T) {
 	job := waitForJobSettled(t, storage, resp.Job.ID)
 	assert.Equal(t, models.JobStatusFailed, job.Status)
 	assert.NotEmpty(t, job.Error)
+}
+
+func seedExportJob(t *testing.T, storage *JobStorage, instanceName string, result string) string {
+	t.Helper()
+
+	job := &models.Job{
+		ID:           generateJobID(),
+		Type:         "export",
+		Status:       models.JobStatusCompleted,
+		InstanceName: instanceName,
+		Result:       result,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+	storage.Set(job)
+	return job.ID
+}
+
+func TestDownloadExport_ServesAndRemoves(t *testing.T) {
+	handler, storage, _ := testJobHandler(t)
+
+	content := []byte("fake-image-bytes")
+	imgPath := filepath.Join(t.TempDir(), "cloudpass-export-test-vm-1.img")
+	require.NoError(t, os.WriteFile(imgPath, content, 0600))
+	require.NoError(t, os.WriteFile(imgPath+".json", []byte(`{"instance":"test-vm"}`), 0600))
+	jobID := seedExportJob(t, storage, "test-vm", imgPath)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/instances/test-vm/export/download?job_id="+jobID, nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("name")
+	c.SetParamValues("test-vm")
+
+	require.NoError(t, handler.DownloadExport(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Contains(t, rec.Header().Get("Content-Disposition"), "cloudpass-export-test-vm-1.img")
+	assert.Equal(t, content, rec.Body.Bytes())
+	assert.NoFileExists(t, imgPath)
+	assert.NoFileExists(t, imgPath+".json")
+}
+
+func TestDownloadExport_Sidecar(t *testing.T) {
+	handler, storage, _ := testJobHandler(t)
+
+	imgPath := filepath.Join(t.TempDir(), "cloudpass-export-test-vm-2.img")
+	require.NoError(t, os.WriteFile(imgPath, []byte("img"), 0600))
+	sidecar := []byte(`{"instance":"test-vm","driver":"qemu"}`)
+	require.NoError(t, os.WriteFile(imgPath+".json", sidecar, 0600))
+	jobID := seedExportJob(t, storage, "test-vm", imgPath)
+
+	e := echo.New()
+	req := httptest.NewRequest(http.MethodGet, "/instances/test-vm/export/download?job_id="+jobID+"&sidecar=true", nil)
+	rec := httptest.NewRecorder()
+	c := e.NewContext(req, rec)
+	c.SetParamNames("name")
+	c.SetParamValues("test-vm")
+
+	require.NoError(t, handler.DownloadExport(c))
+	assert.Equal(t, http.StatusOK, rec.Code)
+	assert.Equal(t, sidecar, rec.Body.Bytes())
+}
+
+func TestDownloadExport_States(t *testing.T) {
+	handler, storage, _ := testJobHandler(t)
+
+	pending := &models.Job{ID: generateJobID(), Type: "export", Status: models.JobStatusRunning, InstanceName: "test-vm", CreatedAt: time.Now(), UpdatedAt: time.Now()}
+	storage.Set(pending)
+
+	get := func(name string, jobID string) *httptest.ResponseRecorder {
+		e := echo.New()
+		req := httptest.NewRequest(http.MethodGet, "/instances/"+name+"/export/download?job_id="+jobID, nil)
+		rec := httptest.NewRecorder()
+		c := e.NewContext(req, rec)
+		c.SetParamNames("name")
+		c.SetParamValues(name)
+		require.NoError(t, handler.DownloadExport(c))
+		return rec
+	}
+
+	assert.Equal(t, http.StatusNotFound, get("test-vm", "nope").Code)
+	assert.Equal(t, http.StatusNotFound, get("other-vm", pending.ID).Code)
+	assert.Equal(t, http.StatusConflict, get("test-vm", pending.ID).Code)
+
+	goneID := seedExportJob(t, storage, "test-vm", filepath.Join(t.TempDir(), "missing.img"))
+	assert.Equal(t, http.StatusGone, get("test-vm", goneID).Code)
+
+	outsideID := seedExportJob(t, storage, "test-vm", string(filepath.Separator)+"outside-cloudpass.img")
+	assert.Equal(t, http.StatusConflict, get("test-vm", outsideID).Code)
+}
+
+func TestIsStagedArtifact(t *testing.T) {
+	dir := t.TempDir()
+	assert.True(t, isStagedArtifact(dir, filepath.Join(dir, "a.img")))
+	assert.False(t, isStagedArtifact(dir, filepath.Join(dir, "..", "escape.img")))
+	assert.False(t, isStagedArtifact(dir, filepath.Join(t.TempDir(), "other.img")))
+}
+
+func TestExportAsync_OverwriteGuard(t *testing.T) {
+	handler, storage, _ := testJobHandler(t)
+
+	existing := filepath.Join(t.TempDir(), "taken.img")
+	require.NoError(t, os.WriteFile(existing, []byte("x"), 0600))
+
+	body := `{"output_path":` + strconv.Quote(existing) + `}`
+	_, resp := doAsync(t, handler, handler.ExportAsync, "/instances/test-vm/export/async",
+		map[string]string{"name": "test-vm"}, body, "key-export-guard")
+
+	job := waitForJobSettled(t, storage, resp.Job.ID)
+	assert.Equal(t, models.JobStatusFailed, job.Status)
+	assert.Contains(t, job.Error, "already exists")
+}
+
+func TestCompressDecompressRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	// Zero-heavy content like a thin VM disk.
+	content := append(bytes.Repeat([]byte{0}, 256*1024), bytes.Repeat([]byte("cloudpass"), 1024)...)
+	src := filepath.Join(dir, "disk.img")
+	require.NoError(t, os.WriteFile(src, content, 0600))
+
+	zst, err := compressImage(src)
+	require.NoError(t, err)
+	assert.Equal(t, src+".zst", zst)
+	assert.True(t, isZstdImage(zst))
+	assert.False(t, isZstdImage(src))
+
+	infoSrc, _ := os.Stat(src)
+	infoZst, _ := os.Stat(zst)
+	require.NotNil(t, infoSrc)
+	require.NotNil(t, infoZst)
+	assert.Less(t, infoZst.Size(), infoSrc.Size(), "compressed image should be smaller")
+
+	out, err := decompressImage(dir, zst)
+	require.NoError(t, err)
+	roundTripped, err := os.ReadFile(out)
+	require.NoError(t, err)
+	assert.Equal(t, content, roundTripped)
+}
+
+func TestIsZstdImage_MissingFile(t *testing.T) {
+	assert.False(t, isZstdImage(filepath.Join(t.TempDir(), "nope.img")))
 }

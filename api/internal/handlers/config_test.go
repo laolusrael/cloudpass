@@ -156,12 +156,18 @@ func TestConfigGet_ReturnsUploadSettings(t *testing.T) {
 
 func TestConfigUpdate_UploadSettings(t *testing.T) {
 	e := echo.New()
-	mgr := testConfigManager(t, &config.Config{})
+	mgr := testConfigManager(t, &config.Config{
+		Upload: config.UploadConfig{
+			MaxFileSizeMB:  100,
+			MaxImageSizeMB: 10240,
+			DefaultPath:    "/home/ubuntu/uploads",
+		},
+	})
 	handler := NewConfigHandler(mgr)
 
 	// TempDir-anchored so the staging path is absolute on every OS.
 	staging := filepath.Join(t.TempDir(), "staging")
-	body := fmt.Sprintf(`{"upload":{"max_file_size_mb":50,"default_path":"/custom/uploads","staging_dir":%q}}`, staging)
+	body := fmt.Sprintf(`{"upload":{"max_file_size_mb":50,"max_image_size_mb":5120,"default_path":"/custom/uploads","staging_dir":%q}}`, staging)
 	req := httptest.NewRequest(http.MethodPost, "/api/config", strings.NewReader(body))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationJSON)
 	rec := httptest.NewRecorder()
@@ -170,6 +176,7 @@ func TestConfigUpdate_UploadSettings(t *testing.T) {
 	require.NoError(t, handler.Update(c))
 	assert.Equal(t, http.StatusOK, rec.Code)
 	assert.Equal(t, 50, mgr.GetUploadConfig().MaxFileSizeMB)
+	assert.Equal(t, 5120, mgr.GetUploadConfig().MaxImageSizeMB)
 	assert.Equal(t, "/custom/uploads", mgr.GetUploadConfig().DefaultPath)
 	assert.Equal(t, staging, mgr.GetUploadConfig().StagingDir)
 }

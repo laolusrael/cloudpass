@@ -118,34 +118,33 @@
 		}
 	}
 
+	let exporting = $state(false);
+	let exportDownload = $state<{ jobId: string; path: string } | null>(null);
+
 	async function handleExport() {
 		if (!instance) return;
 		const name = instance.name;
+		if (
+			instance.state === 'Running' &&
+			!confirm(`Export requires stopping "${name}". It will remain stopped. Continue?`)
+		) {
+			return;
+		}
+		exporting = true;
+		exportDownload = null;
 		try {
 			const job = await api.exportInstanceAsync(name, undefined, {
 				idempotencyKey: generateIdempotencyKey()
 			});
 			notifications.info(`Export of "${name}" started — this can take a while.`);
-			const result = await waitForJob(job.id);
-			notifications.success(`Instance exported to: ${result || 'image file'}`);
+			const result = await waitForJob(job.id, { timeoutMs: 30 * 60 * 1000 });
+			exportDownload = { jobId: job.id, path: result || 'image file' };
+			notifications.success(`Instance exported. Download it below before it expires.`);
+			await loadInstance();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to export';
-		}
-	}
-
-	async function handleImport() {
-		const imagePath = prompt('Enter image path to import:');
-		if (!imagePath) return;
-		const name = prompt('Enter instance name (optional):');
-		try {
-			await api.importInstanceAsync(
-				{ image_path: imagePath, name: name || undefined },
-				{ idempotencyKey: generateIdempotencyKey() }
-			);
-			notifications.info('Import started — you will be notified when ready.');
-			goto('/');
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to import';
+		} finally {
+			exporting = false;
 		}
 	}
 
@@ -323,8 +322,9 @@
 				{:else if isStopped}
 					<Button variant="primary" onclick={handleStart}>Start</Button>
 				{/if}
-				<Button variant="secondary" onclick={handleExport}>Export</Button>
-				<Button variant="secondary" onclick={handleImport}>Import</Button>
+				<Button variant="secondary" onclick={handleExport} disabled={exporting}>
+					{exporting ? 'Exporting...' : 'Export'}
+				</Button>
 				<Button variant="danger" onclick={handleDelete}>Delete</Button>
 			{/if}
 		</div>
@@ -333,6 +333,29 @@
 	{#if error}
 		<div class="bg-red-50 border border-red-200 rounded p-4">
 			<p class="text-sm text-red-600">{error}</p>
+		</div>
+	{/if}
+
+	{#if exportDownload && instance}
+		<div class="bg-green-50 border border-green-200 rounded p-4">
+			<p class="text-sm text-green-800 mb-2">
+				Export ready: <span class="font-mono">{exportDownload.path}</span> — files are removed after download
+				or after 24 hours.
+			</p>
+			<div class="flex gap-2">
+				<a
+					href={api.exportInstanceDownloadUrl(instance.name, exportDownload.jobId)}
+					class="px-4 py-2 text-sm font-medium rounded bg-gray-700 text-white hover:bg-gray-600"
+				>
+					Download image
+				</a>
+				<a
+					href={api.exportInstanceDownloadUrl(instance.name, exportDownload.jobId, true)}
+					class="px-4 py-2 text-sm font-medium rounded bg-gray-200 text-gray-700 hover:bg-gray-300"
+				>
+					Download metadata
+				</a>
+			</div>
 		</div>
 	{/if}
 

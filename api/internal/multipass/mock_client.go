@@ -26,6 +26,7 @@ type MockClient struct {
 	lastMountSource  string
 	lastMountTarget  string
 	lastMountOpts    MountOptions
+	lastImportPath   string
 }
 
 func (m *MockClient) SetListImagesErr(err error) {
@@ -304,9 +305,14 @@ func (m *MockClient) ExportInstance(instanceName string, outputPath string) (str
 }
 
 func (m *MockClient) ImportInstance(imagePath string, name string, cpus int, memory string, disk string) (*models.Instance, error) {
+	m.lastImportPath = imagePath
 	inst := models.Instance{Name: name}
 	m.instances = append(m.instances, inst)
 	return &inst, nil
+}
+
+func (m *MockClient) LastImportPath() string {
+	return m.lastImportPath
 }
 
 func (m *MockClient) Authenticate(passphrase string) error {

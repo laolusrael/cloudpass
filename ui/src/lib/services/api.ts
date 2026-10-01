@@ -482,28 +482,49 @@ class ApiService {
 			formData.append('target_path', targetPath);
 		}
 
-		// Note: no Content-Type header — the browser sets the multipart
-		// boundary automatically.
-		const headers: Record<string, string> = {};
+		const response = await this.postFormData(
+			`${API_BASE}/instances/${encodeURIComponent(instanceName)}/upload`,
+			formData,
+			retried
+		);
+
+		if (!response.ok) {
+			throw new Error((await this.readUploadErrorMessage(response)) || 'Upload failed');
+		}
+
+		return response.json();
+	}
+
+	/**
+	 * POST multipart form data with the shared semantics: credentials,
+	 * CSRF header plus a single refresh-and-retry, IP-denial redirect,
+	 * and rate-limit mapping. Callers parse the body themselves.
+	 * Note: no Content-Type header — the browser sets the multipart
+	 * boundary automatically.
+	 */
+	private async postFormData(
+		url: string,
+		formData: FormData,
+		retried = false,
+		extraHeaders: Record<string, string> = {}
+	): Promise<Response> {
+		const headers: Record<string, string> = { ...extraHeaders };
 		if (this.csrfToken) {
 			headers['X-CSRF-Token'] = this.csrfToken;
 		}
 
-		const response = await fetch(
-			`${API_BASE}/instances/${encodeURIComponent(instanceName)}/upload`,
-			{
-				method: 'POST',
-				body: formData,
-				credentials: 'include',
-				headers
-			}
-		);
+		const response = await fetch(url, {
+			method: 'POST',
+			body: formData,
+			credentials: 'include',
+			headers
+		});
 
 		if (response.status === 403) {
 			const err = await this.readForbiddenError(response);
 			if (err instanceof CSRFExpiredError && !retried) {
 				await this.initCSRF();
-				return this.uploadFile(instanceName, file, targetPath, true);
+				return this.postFormData(url, formData, true, extraHeaders);
 			}
 			if (err instanceof IPForbiddenError) {
 				window.location.href = '/unauthorized';
@@ -515,11 +536,53 @@ class ApiService {
 			this.throwIfRateLimited(response);
 		}
 
-		if (!response.ok) {
-			throw new Error((await this.readUploadErrorMessage(response)) || 'Upload failed');
+		return response;
+	}
+
+	/**
+	 * Upload a VM image from the browser and launch it as a job.
+	 * Returns immediately (202); track via getJob() or the jobs store.
+	 */
+	async importInstanceFromFile(
+		file: File,
+		name?: string,
+		options: { idempotencyKey?: string; signal?: AbortSignal } = {}
+	): Promise<Job> {
+		const formData = new FormData();
+		formData.append('file', file);
+		if (name) {
+			formData.append('name', name);
 		}
 
-		return response.json();
+		const extraHeaders: Record<string, string> = {};
+		if (options.idempotencyKey) {
+			extraHeaders['Idempotency-Key'] = options.idempotencyKey;
+		}
+		const response = await this.postFormData(
+			`${API_BASE}/instances/import/async`,
+			formData,
+			false,
+			extraHeaders
+		);
+
+		if (!response.ok) {
+			throw new Error((await this.readUploadErrorMessage(response)) || 'Import failed');
+		}
+
+		const data = (await response.json()) as JobResponse;
+		return data.job;
+	}
+
+	/**
+	 * Browser-navigation URL for downloading a completed export (or its
+	 * sidecar). Downloads ride cookies, and GET needs no CSRF header.
+	 */
+	exportInstanceDownloadUrl(instanceName: string, jobId: string, sidecar = false): string {
+		const params = new URLSearchParams({ job_id: jobId });
+		if (sidecar) {
+			params.set('sidecar', 'true');
+		}
+		return `${API_BASE}/instances/${encodeURIComponent(instanceName)}/export/download?${params.toString()}`;
 	}
 
 	/**

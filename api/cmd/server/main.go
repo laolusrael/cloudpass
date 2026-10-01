@@ -89,6 +89,12 @@ func main() {
 		Str("default_mount_type", env.DefaultMountType()).
 		Msg("detected host environment")
 
+	// Reactive artifact retention (no background sweeper by design): clean
+	// expired staged images/uploads left by previous runs.
+	if removed, freed := handlers.SweepArtifacts(cfgManager.EffectiveStagingDir()); removed > 0 {
+		log.Info().Int("removed", removed).Int64("freed_bytes", freed).Msg("startup artifact sweep")
+	}
+
 	mpClient := multipass.NewClient(cfgManager.GetMultipassTimeout())
 
 	if cfg.Multipass.Passphrase != "" {
@@ -172,6 +178,7 @@ func main() {
 	api.POST("/instances/:name/resume", instanceHandler.Resume)
 	api.POST("/instances/:name/export", instanceHandler.Export)
 	api.POST("/instances/:name/export/async", jobHandler.ExportAsync)
+	api.GET("/instances/:name/export/download", jobHandler.DownloadExport)
 	api.POST("/instances/:name/snapshots", instanceHandler.CreateSnapshot)
 	api.POST("/instances/:name/snapshots/async", jobHandler.CreateSnapshotAsync)
 	api.GET("/instances/:name/snapshots", instanceHandler.ListSnapshots)

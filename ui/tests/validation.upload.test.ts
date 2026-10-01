@@ -2,7 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
 	validateSelectedFile,
 	formatFileSize,
-	validateUploadSettings
+	validateUploadSettings,
+	validateImageSizeMB
 } from '../src/lib/validation/upload';
 
 function sizedFile(size: number): File {
@@ -55,5 +56,19 @@ describe('validateUploadSettings', () => {
 		expect(validateUploadSettings(100, '/x', '/var/staging')).toBeNull();
 		expect(validateUploadSettings(100, '/x', 'C:\\staging')).toBeNull();
 		expect(validateUploadSettings(100, '/x', 'relative/staging')).toContain('absolute');
+	});
+});
+
+describe('validateImageSizeMB', () => {
+	it('accepts values within 1 MB and 100 GB', () => {
+		expect(validateImageSizeMB(10240)).toBeNull();
+		expect(validateImageSizeMB(1)).toBeNull();
+	});
+
+	it('rejects out-of-range values', () => {
+		expect(validateImageSizeMB(0)).toContain('between 1 and 102400');
+		expect(validateImageSizeMB(102401)).toContain('between 1 and 102400');
+		expect(validateImageSizeMB(1.5)).toContain('whole number');
+		expect(validateImageSizeMB('big')).toContain('whole number');
 	});
 });
