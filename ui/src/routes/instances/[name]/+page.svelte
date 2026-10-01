@@ -12,6 +12,9 @@
 	import Button from '$lib/components/Button.svelte';
 	import Badge from '$lib/components/Badge.svelte';
 	import Spinner from '$lib/components/Spinner.svelte';
+	import Modal from '$lib/components/Modal.svelte';
+	import Select from '$lib/components/Select.svelte';
+	import { networks } from '$lib/stores/networks';
 	import InstanceResourcesModal from '$lib/components/InstanceResourcesModal.svelte';
 
 	let instance = $state<Instance | null>(null);
@@ -35,6 +38,10 @@
 	let uploadMaxMB = $state(100);
 	let uploadDefaultPath = $state('/home/ubuntu/uploads');
 	let showEditResourcesModal = $state(false);
+	let trackedNetwork = $state<string | null>(null);
+	let showNetworkModal = $state(false);
+	let selectedNetwork = $state('');
+	let savingNetwork = $state(false);
 
 	const name = $derived($page.params.name ?? '');
 
@@ -70,10 +77,21 @@
 		}
 	}
 
+	async function loadTrackedNetwork() {
+		try {
+			const data = await api.getInstanceNetwork(name);
+			trackedNetwork = data.network ?? null;
+		} catch (e) {
+			console.error('Failed to load tracked network:', e);
+		}
+	}
+
 	onMount(() => {
 		loadInstance();
 		loadHostInfo();
 		loadUploadLimits();
+		loadTrackedNetwork();
+		networks.refresh();
 	});
 
 	async function handleStart() {
@@ -300,6 +318,37 @@
 		}
 	}
 
+	const networkOptions = $derived(
+		$networks.map((net) => ({
+			value: net.name,
+			label: net.description ? `${net.name} (${net.description})` : net.name
+		}))
+	);
+
+	function openNetworkModal() {
+		selectedNetwork = trackedNetwork ?? '';
+		showNetworkModal = true;
+	}
+
+	async function handleSaveNetwork() {
+		if (!instance) return;
+		savingNetwork = true;
+		try {
+			const data = await api.setInstanceNetwork(instance.name, selectedNetwork || undefined);
+			trackedNetwork = data.network ?? null;
+			showNetworkModal = false;
+			notifications.success(
+				data.network
+					? `Instance attributed to network "${data.network}"`
+					: 'Network attribution cleared'
+			);
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to set network';
+		} finally {
+			savingNetwork = false;
+		}
+	}
+
 	const isRunning = $derived(instance?.state === 'Running');
 	const isStopped = $derived(instance?.state === 'Stopped');
 	const isDeleted = $derived(instance?.state === 'Deleted');
@@ -436,6 +485,15 @@
 
 			<Card>
 				<h3 class="text-sm font-medium text-gray-500 mb-3">Network</h3>
+				<dl class="space-y-2">
+					<div class="flex justify-between items-center">
+						<dt class="text-gray-600">Bridge</dt>
+						<dd class="flex items-center gap-2">
+							<span class="font-medium">{trackedNetwork ?? 'Unknown'}</span>
+							<Button variant="secondary" size="sm" onclick={openNetworkModal}>Set</Button>
+						</dd>
+					</div>
+				</dl>
 				{#if instance.ipv4 && instance.ipv4.length > 0}
 					<dl class="space-y-2">
 						{#each instance.ipv4 as ip}
@@ -486,10 +544,41 @@
 						{/each}
 					</ul>
 				{:else}
-					<p class="text-gray-500 text-sm">No mounts</p>
+					<p class="text-gray-500 text-sm">No network addresses</p>
 				{/if}
 			</Card>
 		</div>
+
+		{#snippet networkModalBody()}
+			<div class="space-y-4">
+				<Select
+					label="Bridge network"
+					options={networkOptions}
+					bind:value={selectedNetwork}
+					placeholder="No network (clear attribution)"
+					searchable={true}
+				/>
+				<p class="text-xs text-gray-500">
+					Record-only: Multipass assigns networks at launch, so this never reconfigures the
+					instance. It marks which bridge this instance uses so protected networks can't be
+					deleted out from under it. Leave empty to clear.
+				</p>
+			</div>
+		{/snippet}
+
+		{#snippet networkModalFooter()}
+			<Button variant="secondary" onclick={() => (showNetworkModal = false)} disabled={savingNetwork}>
+				Cancel
+			</Button>
+			<Button variant="primary" onclick={handleSaveNetwork} disabled={savingNetwork}>
+				{savingNetwork ? 'Saving...' : 'Save'}
+			</Button>
+		{/snippet}
+
+		<Modal open={showNetworkModal} title="Set instance network" onclose={() => (showNetworkModal = false)}>
+			{@render networkModalBody()}
+			{@render networkModalFooter()}
+		</Modal>
 	{:else}
 		<div class="text-center py-12 bg-white rounded border border-gray-200">
 			<p class="text-gray-500">Instance not found</p>
