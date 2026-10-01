@@ -55,6 +55,8 @@ export interface Network {
 	type: string;
 	ipv4: string;
 	description: string;
+	used_by?: string[];
+	managed?: boolean;
 }
 
 export interface InstanceList {
@@ -67,6 +69,13 @@ export interface ImageList {
 
 export interface NetworkList {
 	networks: Network[];
+	unverified_instances?: string[];
+}
+
+export interface InstanceNetworkResponse {
+	name: string;
+	network?: string;
+	verified: boolean;
 }
 
 export interface InstanceResponse {

@@ -22,7 +22,8 @@ import type {
 	JobResponse,
 	JobListResponse,
 	HostInfo,
-	UpdateResourcesRequest
+	UpdateResourcesRequest,
+	InstanceNetworkResponse
 } from '$lib/types';
 
 const API_BASE = '/api';
@@ -43,6 +44,20 @@ export class CSRFExpiredError extends Error {
 		super(message);
 		this.name = 'CSRFExpiredError';
 		this.code = code;
+	}
+}
+
+/** Server refused a network delete because instances use it. */
+export class NetworkInUseError extends Error {
+	usedBy: string[];
+
+	constructor(usedBy: string[], message?: string) {
+		super(
+			message ||
+				`Network is in use by: ${usedBy.join(', ')}`
+		);
+		this.name = 'NetworkInUseError';
+		this.usedBy = usedBy;
 	}
 }
 
@@ -184,6 +199,15 @@ class ApiService {
 		}
 
 		this.throwIfRateLimited(response);
+
+		if (response.status === 409) {
+			const conflict = (await response.json()) as Partial<ErrorResponse> & {
+				used_by?: string[];
+			};
+			if (conflict.error === 'network_in_use') {
+				throw new NetworkInUseError(conflict.used_by ?? [], conflict.message);
+			}
+		}
 
 		if (!response.ok) {
 			const error: ErrorResponse = await response.json();
@@ -334,6 +358,34 @@ class ApiService {
 		return this.request<InstanceResponse>(`/networks/${encodeURIComponent(name)}`, {
 			method: 'DELETE'
 		});
+	}
+
+	async claimNetwork(name: string): Promise<InstanceResponse> {
+		return this.request<InstanceResponse>(`/networks/${encodeURIComponent(name)}/claim`, {
+			method: 'POST'
+		});
+	}
+
+	async unclaimNetwork(name: string): Promise<InstanceResponse> {
+		return this.request<InstanceResponse>(`/networks/${encodeURIComponent(name)}/claim`, {
+			method: 'DELETE'
+		});
+	}
+
+	async getInstanceNetwork(name: string): Promise<InstanceNetworkResponse> {
+		return this.request<InstanceNetworkResponse>(
+			`/instances/${encodeURIComponent(name)}/network`
+		);
+	}
+
+	async setInstanceNetwork(name: string, network?: string): Promise<InstanceNetworkResponse> {
+		return this.request<InstanceNetworkResponse>(
+			`/instances/${encodeURIComponent(name)}/network`,
+			{
+				method: 'POST',
+				body: JSON.stringify({ network: network ?? '' })
+			}
+		);
 	}
 
 	async healthCheck(): Promise<{ status: string }> {
