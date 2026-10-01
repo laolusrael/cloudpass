@@ -583,7 +583,7 @@ func compressImage(srcPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	dst, err := os.OpenFile(dstPath, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0600)
 	if err != nil {
@@ -619,7 +619,7 @@ func isZstdImage(path string) bool {
 	if err != nil {
 		return false
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	var magic [4]byte
 	if _, err := io.ReadFull(f, magic[:]); err != nil {
@@ -646,7 +646,7 @@ func decompressImage(staging string, srcPath string) (string, error) {
 		_ = os.Remove(dstName)
 		return "", err
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	dec, err := zstd.NewReader(src)
 	if err != nil {
@@ -832,7 +832,7 @@ func (h *JobHandler) stageImportUpload(c echo.Context) (models.ImportInstanceReq
 		_ = os.Remove(tmpName)
 		return fail(http.StatusInternalServerError, "upload_error", "failed to read uploaded image")
 	}
-	defer src.Close()
+	defer func() { _ = src.Close() }()
 
 	written, err := io.Copy(tmpFile, io.LimitReader(src, maxSize+1))
 	if closeErr := tmpFile.Close(); closeErr != nil && err == nil {
@@ -909,13 +909,13 @@ func (h *JobHandler) runImport(jobID string, req models.ImportInstanceRequest, s
 			h.failJob(jobID, fmt.Errorf("failed to decompress image: %w", err), "import decompression failed")
 			return
 		}
-		defer os.Remove(decoded)
+		defer func() { _ = os.Remove(decoded) }()
 		launchPath = decoded
 	} else {
 		h.checkImageSidecar(req.ImagePath)
 	}
 	if stagedUpload != "" {
-		defer os.Remove(stagedUpload)
+		defer func() { _ = os.Remove(stagedUpload) }()
 	}
 	instance, err := h.mpClient.ImportInstance(launchPath, req.Name, req.CPUs, req.Memory, req.Disk)
 	if err != nil {
@@ -984,7 +984,7 @@ func (h *JobHandler) DownloadExport(c echo.Context) error {
 			Message: "export file has expired; export the instance again",
 		})
 	}
-	defer f.Close()
+	defer func() { _ = f.Close() }()
 
 	info, err := f.Stat()
 	if err != nil {

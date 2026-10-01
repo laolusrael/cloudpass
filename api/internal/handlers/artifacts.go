@@ -51,7 +51,7 @@ func listArtifacts(stagingDir string) []artifactEntry {
 	if err != nil {
 		return nil
 	}
-	defer dir.Close()
+	defer func() { _ = dir.Close() }()
 
 	names, err := dir.Readdirnames(-1)
 	if err != nil {
