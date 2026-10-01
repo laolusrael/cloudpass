@@ -18,6 +18,7 @@ type MockClient struct {
 	deleteNetworkErr error
 	suspendErr       error
 	resumeErr        error
+	recoverErr       error
 	uploadErr        error
 	lastUploadLocal  string
 	lastUploadTarget string
@@ -135,6 +136,19 @@ func (m *MockClient) DeleteInstance(name string) error {
 	return nil
 }
 
+func (m *MockClient) RecoverInstance(name string) error {
+	if m.recoverErr != nil {
+		return m.recoverErr
+	}
+	for i := range m.instances {
+		if m.instances[i].Name == name {
+			m.instances[i].State = "Stopped"
+			return nil
+		}
+	}
+	return fmt.Errorf("instance %q not found", name)
+}
+
 func (m *MockClient) ListImages() ([]models.Image, error) {
 	if m.listImagesErr != nil {
 		return nil, m.listImagesErr
@@ -182,6 +196,10 @@ func (m *MockClient) SetGetInstanceErr(err error) {
 
 func (m *MockClient) SetSuspendErr(err error) {
 	m.suspendErr = err
+}
+
+func (m *MockClient) SetRecoverErr(err error) {
+	m.recoverErr = err
 }
 
 func (m *MockClient) SetUploadErr(err error) {
@@ -298,6 +316,11 @@ func (m *MockClient) DeleteSnapshot(instanceName string, snapshotName string) er
 }
 
 func (m *MockClient) ExportInstance(instanceName string, outputPath string) (string, error) {
+	for _, inst := range m.instances {
+		if inst.Name == instanceName && inst.State == "Deleted" {
+			return "", fmt.Errorf("instance %q is deleted; recover it before exporting", instanceName)
+		}
+	}
 	if outputPath == "" {
 		outputPath = "./" + instanceName + ".img"
 	}

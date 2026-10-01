@@ -145,6 +145,8 @@ http://localhost:8080/api
 | `POST` | `/instances/:name/restart` | Restart instance | 1 |
 | `POST` | `/instances/:name/suspend` | Suspend instance | 2 |
 | `WS` | `/instances/:name/shell` | WebSocket terminal | 2 |
+| `POST` | `/instances/:name/recover` | Recover deleted instance | 3 |
+| `POST` | `/instances/purge` | Permanently destroy all deleted instances | 3 |
 | `GET` | `/images` | List available images | 1 |
 | `GET` | `/networks` | List available networks | 1 |
 | `POST` | `/networks` | Create network bridge | 2 |
@@ -294,6 +296,16 @@ Portability contract: same driver + arch imports directly (`multipass launch`
 of the image). Cross-driver (QEMU qcow2 ↔ Hyper-V vhdx) needs `qemu-img`
 conversion — out of scope; the sidecar records the source driver so the server
 warns before launching.
+
+### 4.8 Instance lifecycle (recycle bin)
+
+`DELETE /instances/:name` is soft: the instance enters `Deleted` and keeps its
+data until purged. Deleted instances accept no operations except recover —
+notably, export refuses them with `invalid_request` naming recovery
+(`"<name>" is deleted; recover it before exporting`). Recover via
+`POST /instances/:name/recover` (returns to `Stopped`); destroy everything
+deleted at once via `POST /instances/purge` (double-confirmed in UI,
+irreversible). Exports always run from stopped, recovered instances.
 
 ### 4.8 WebSocket Protocol
 

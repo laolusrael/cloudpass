@@ -32,6 +32,7 @@ type Client interface {
 	SuspendInstance(name string) error
 	ResumeInstance(name string) error
 	DeleteInstance(name string) error
+	RecoverInstance(name string) error
 	PurgeDeleted() error
 	ListImages() ([]models.Image, error)
 	ListNetworks() ([]models.Network, error)
@@ -514,6 +515,24 @@ func (c *multipassClient) DeleteInstance(name string) error {
 	}
 
 	logger.Multipass.Load().Info().Str("name", name).Msg("instance deleted")
+	return nil
+}
+
+func (c *multipassClient) RecoverInstance(name string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	logger.Multipass.Load().Info().Str("name", name).Msg("recovering instance")
+	cmd := exec.CommandContext(ctx, "multipass", "recover", name)
+	if out, err := cmd.Output(); err != nil {
+		if strings.Contains(string(out), "not found") || strings.Contains(err.Error(), "not found") {
+			return fmt.Errorf("instance %q not found", name)
+		}
+		logger.Multipass.Load().Error().Err(err).Str("name", name).Msg("failed to recover instance")
+		return fmt.Errorf("failed to recover instance: %w", err)
+	}
+
+	logger.Multipass.Load().Info().Str("name", name).Msg("instance recovered")
 	return nil
 }
 
@@ -1078,6 +1097,9 @@ func (c *multipassClient) ExportInstance(instanceName string, outputPath string)
 	instance, err := c.GetInstance(instanceName)
 	if err != nil {
 		return "", err
+	}
+	if instance.State == "Deleted" {
+		return "", fmt.Errorf("instance %q is deleted; recover it before exporting", instanceName)
 	}
 
 	if instance.State != "Stopped" {
