@@ -63,9 +63,10 @@ func TestValidateInstanceName(t *testing.T) {
 	}
 }
 
-func setupInstanceRouter(client multipass.Client) *echo.Echo {
+func setupInstanceRouter(t *testing.T, client multipass.Client) *echo.Echo {
+	t.Helper()
 	e := echo.New()
-	handler := NewInstanceHandler(client, testConfig())
+	handler := NewInstanceHandler(client, testConfig(), mustNetworkUsage(t))
 	e.GET("/instances", handler.List)
 	e.GET("/instances/:name", handler.Get)
 	e.POST("/instances", handler.Create)
@@ -85,7 +86,7 @@ func TestRecover_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Deleted"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/recover", nil)
 	rec := httptest.NewRecorder()
@@ -98,7 +99,7 @@ func TestRecover_Success(t *testing.T) {
 func TestRecover_NotFound(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/missing/recover", nil)
 	rec := httptest.NewRecorder()
@@ -110,7 +111,7 @@ func TestRecover_NotFound(t *testing.T) {
 func TestRecover_InvalidName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/123invalid/recover", nil)
 	rec := httptest.NewRecorder()
@@ -122,7 +123,7 @@ func TestRecover_InvalidName(t *testing.T) {
 func TestPurge_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/purge", nil)
 	rec := httptest.NewRecorder()
@@ -136,7 +137,7 @@ func TestExport_DeletedRejected(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Deleted"}})
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/export", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
@@ -151,7 +152,7 @@ func TestSuspend_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/suspend", nil)
 	rec := httptest.NewRecorder()
@@ -164,7 +165,7 @@ func TestSuspend_Success(t *testing.T) {
 func TestSuspend_EmptyName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances//suspend", nil)
 	rec := httptest.NewRecorder()
@@ -176,7 +177,7 @@ func TestSuspend_EmptyName(t *testing.T) {
 func TestSuspend_InvalidName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/123invalid/suspend", nil)
 	rec := httptest.NewRecorder()
@@ -190,7 +191,7 @@ func TestSuspend_InstanceNotFound(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetSuspendErr(errors.New("instance does not exist"))
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/suspend", nil)
 	rec := httptest.NewRecorder()
@@ -204,7 +205,7 @@ func TestSuspend_MultipassError(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetSuspendErr(errors.New("multipass service unavailable"))
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/suspend", nil)
 	rec := httptest.NewRecorder()
@@ -217,7 +218,7 @@ func TestResume_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/resume", nil)
 	rec := httptest.NewRecorder()
@@ -230,7 +231,7 @@ func TestResume_Success(t *testing.T) {
 func TestResume_EmptyName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances//resume", nil)
 	rec := httptest.NewRecorder()
@@ -242,7 +243,7 @@ func TestResume_EmptyName(t *testing.T) {
 func TestResume_InvalidName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/vm-test-/resume", nil)
 	rec := httptest.NewRecorder()
@@ -256,7 +257,7 @@ func TestResume_InstanceNotFound(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetResumeErr(errors.New("instance does not exist"))
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/resume", nil)
 	rec := httptest.NewRecorder()
@@ -269,7 +270,7 @@ func TestResume_MultipassError(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetResumeErr(errors.New("multipass service unavailable"))
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/resume", nil)
 	rec := httptest.NewRecorder()
@@ -282,7 +283,7 @@ func TestList_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "vm1", State: "Running"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodGet, "/instances", nil)
 	rec := httptest.NewRecorder()
@@ -296,7 +297,7 @@ func TestList_Empty(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodGet, "/instances", nil)
 	rec := httptest.NewRecorder()
@@ -310,7 +311,7 @@ func TestGet_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "vm1", State: "Running", CPU: 4}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodGet, "/instances/vm1", nil)
 	rec := httptest.NewRecorder()
@@ -324,7 +325,7 @@ func TestGet_NotFound(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetGetInstanceErr(errors.New("instance not found"))
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodGet, "/instances/vm1", nil)
 	rec := httptest.NewRecorder()
@@ -336,7 +337,7 @@ func TestGet_NotFound(t *testing.T) {
 func TestGet_EmptyName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodGet, "/instances/", nil)
 	rec := httptest.NewRecorder()
@@ -348,7 +349,7 @@ func TestGet_EmptyName(t *testing.T) {
 func TestCreate_InvalidBody(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances", strings.NewReader("invalid"))
 	req.Header.Set("Content-Type", "application/json")
@@ -361,7 +362,7 @@ func TestCreate_InvalidBody(t *testing.T) {
 func TestCreate_InvalidName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	body := `{"name": "123invalid"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances", strings.NewReader(body))
@@ -375,7 +376,7 @@ func TestCreate_InvalidName(t *testing.T) {
 func TestStart_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test/start", nil)
 	rec := httptest.NewRecorder()
@@ -387,7 +388,7 @@ func TestStart_Success(t *testing.T) {
 func TestStop_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test/stop", nil)
 	rec := httptest.NewRecorder()
@@ -399,7 +400,7 @@ func TestStop_Success(t *testing.T) {
 func TestRestart_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test/restart", nil)
 	rec := httptest.NewRecorder()
@@ -408,9 +409,10 @@ func TestRestart_Success(t *testing.T) {
 	assert.Equal(t, http.StatusOK, rec.Code)
 }
 
-func setupSnapshotRouter(client multipass.Client) *echo.Echo {
+func setupSnapshotRouter(t *testing.T, client multipass.Client) *echo.Echo {
+	t.Helper()
 	e := echo.New()
-	handler := NewInstanceHandler(client, testConfig())
+	handler := NewInstanceHandler(client, testConfig(), mustNetworkUsage(t))
 	e.POST("/instances/:name/snapshots", handler.CreateSnapshot)
 	e.GET("/instances/:name/snapshots", handler.ListSnapshots)
 	e.POST("/instances/:name/snapshots/:id/restore", handler.RestoreSnapshot)
@@ -423,7 +425,7 @@ func setupSnapshotRouter(client multipass.Client) *echo.Echo {
 func TestCreateSnapshot_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/snapshots", nil)
 	rec := httptest.NewRecorder()
@@ -436,7 +438,7 @@ func TestCreateSnapshot_Success(t *testing.T) {
 func TestCreateSnapshot_EmptyName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances//snapshots", nil)
 	rec := httptest.NewRecorder()
@@ -448,7 +450,7 @@ func TestCreateSnapshot_EmptyName(t *testing.T) {
 func TestListSnapshots_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodGet, "/instances/test-vm/snapshots", nil)
 	rec := httptest.NewRecorder()
@@ -461,7 +463,7 @@ func TestListSnapshots_Success(t *testing.T) {
 func TestListSnapshots_EmptyName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodGet, "/instances//snapshots", nil)
 	rec := httptest.NewRecorder()
@@ -473,7 +475,7 @@ func TestListSnapshots_EmptyName(t *testing.T) {
 func TestRestoreSnapshot_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/snapshots/snap1/restore", nil)
 	rec := httptest.NewRecorder()
@@ -486,7 +488,7 @@ func TestRestoreSnapshot_Success(t *testing.T) {
 func TestRestoreSnapshot_EmptyName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances//snapshots/snap1/restore", nil)
 	rec := httptest.NewRecorder()
@@ -498,7 +500,7 @@ func TestRestoreSnapshot_EmptyName(t *testing.T) {
 func TestDeleteSnapshot_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodDelete, "/instances/test-vm/snapshots/snap1", nil)
 	rec := httptest.NewRecorder()
@@ -511,7 +513,7 @@ func TestDeleteSnapshot_Success(t *testing.T) {
 func TestExport_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/export", nil)
 	rec := httptest.NewRecorder()
@@ -524,7 +526,7 @@ func TestExport_Success(t *testing.T) {
 func TestExport_EmptyName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	req := httptest.NewRequest(http.MethodPost, "/instances//export", nil)
 	rec := httptest.NewRecorder()
@@ -536,7 +538,7 @@ func TestExport_EmptyName(t *testing.T) {
 func TestImport_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	body := `{"image_path": "/path/to/image.img", "name": "imported-vm"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/import", strings.NewReader(body))
@@ -550,7 +552,7 @@ func TestImport_Success(t *testing.T) {
 func TestImport_MissingImagePath(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupSnapshotRouter(mockClient)
+	e := setupSnapshotRouter(t, mockClient)
 
 	body := `{"name": "imported-vm"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/import", strings.NewReader(body))
@@ -562,9 +564,10 @@ func TestImport_MissingImagePath(t *testing.T) {
 	assert.Contains(t, rec.Body.String(), "image_path is required")
 }
 
-func setupMountRouter(client multipass.Client) *echo.Echo {
+func setupMountRouter(t *testing.T, client multipass.Client) *echo.Echo {
+	t.Helper()
 	e := echo.New()
-	handler := NewInstanceHandler(client, testConfig())
+	handler := NewInstanceHandler(client, testConfig(), mustNetworkUsage(t))
 	e.POST("/instances/:name/mounts", handler.Mount)
 	e.DELETE("/instances/:name/mounts", handler.Unmount)
 	return e
@@ -574,7 +577,7 @@ func TestMount_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
@@ -590,7 +593,7 @@ func TestMount_MissingSourcePath(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"target_path": "/home/ubuntu/projects"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
@@ -606,7 +609,7 @@ func TestMount_MissingTargetPath(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"source_path": "/home/user/projects"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
@@ -621,7 +624,7 @@ func TestMount_MissingTargetPath(t *testing.T) {
 func TestMount_EmptyName(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances//mounts", strings.NewReader(body))
@@ -636,7 +639,7 @@ func TestUnmount_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"target_path": "/home/ubuntu/projects"}`
 	req := httptest.NewRequest(http.MethodDelete, "/instances/test-vm/mounts", strings.NewReader(body))
@@ -652,7 +655,7 @@ func TestUnmount_MissingTargetPath(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{}`
 	req := httptest.NewRequest(http.MethodDelete, "/instances/test-vm/mounts", strings.NewReader(body))
@@ -669,7 +672,7 @@ func TestMount_SourceErrorIsBadRequestNotNotFound(t *testing.T) {
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 	mockClient.SetMountErr(errors.New(`source path "/nope" does not exist`))
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"source_path": "/nope", "target_path": "/home/ubuntu/projects"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
@@ -686,7 +689,7 @@ func TestMount_AlreadyMountedIsConflict(t *testing.T) {
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 	mockClient.SetMountErr(errors.New(`"/home/ubuntu/projects" is already mounted in 'test-vm'`))
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
@@ -714,7 +717,7 @@ func TestMount_InvalidTypeAndMaps(t *testing.T) {
 			mockClient := multipass.NewMockClient()
 			mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 
-			e := setupMountRouter(mockClient)
+			e := setupMountRouter(t, mockClient)
 
 			req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(tt.body))
 			req.Header.Set("Content-Type", "application/json")
@@ -731,7 +734,7 @@ func TestMount_PassesOptionsThrough(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects", "mount_type": "native", "uid_map": "1000:1000", "gid_map": "1000:1000"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
@@ -752,7 +755,7 @@ func TestMount_NotRunning(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped"}})
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
@@ -767,7 +770,7 @@ func TestMount_NotRunning(t *testing.T) {
 func TestUnmount_InstanceNotFound(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"target_path": "/home/ubuntu/projects"}`
 	req := httptest.NewRequest(http.MethodDelete, "/instances/missing/mounts", strings.NewReader(body))
@@ -785,7 +788,7 @@ func TestMount_AutoTypeFollowsEnvironment(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"source_path": "/home/user/projects", "target_path": "/home/ubuntu/projects"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
@@ -806,7 +809,7 @@ func TestMount_SnapTmpSourceRejected(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running"}})
 
-	e := setupMountRouter(mockClient)
+	e := setupMountRouter(t, mockClient)
 
 	body := `{"source_path": "/tmp/projects", "target_path": "/home/ubuntu/projects"}`
 	req := httptest.NewRequest(http.MethodPost, "/instances/test-vm/mounts", strings.NewReader(body))
@@ -822,7 +825,7 @@ func TestUpdateResources_Success(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	body := `{"cpus": 2, "memory": "2G", "disk": "10G"}`
 	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
@@ -838,7 +841,7 @@ func TestUpdateResources_InstanceNotStopped(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Running", CPU: 1, Memory: "1G", Disk: "5G"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	body := `{"cpus": 2}`
 	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
@@ -854,7 +857,7 @@ func TestUpdateResources_CPUExceedsAvailable(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	body := `{"cpus": 100}`
 	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
@@ -870,7 +873,7 @@ func TestUpdateResources_MemoryExceedsAvailable(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	body := `{"memory": "100G"}`
 	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
@@ -886,7 +889,7 @@ func TestUpdateResources_DiskShrinkRejected(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "10G"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	body := `{"disk": "5G"}`
 	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
@@ -902,7 +905,7 @@ func TestUpdateResources_DiskExceedsAvailable(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	body := `{"disk": "1000G"}`
 	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
@@ -917,7 +920,7 @@ func TestUpdateResources_DiskExceedsAvailable(t *testing.T) {
 func TestUpdateResources_InstanceNotFound(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	body := `{"cpus": 2}`
 	req := httptest.NewRequest(http.MethodPut, "/instances/nonexistent/resources", strings.NewReader(body))
@@ -932,7 +935,7 @@ func TestUpdateResources_InvalidMemoryFormat(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	body := `{"memory": "invalid"}`
 	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))
@@ -948,7 +951,7 @@ func TestUpdateResources_DecimalMemoryFormat(t *testing.T) {
 	mockClient := multipass.NewMockClient()
 	mockClient.SetInstances([]models.Instance{{Name: "test-vm", State: "Stopped", CPU: 1, Memory: "1G", Disk: "5G"}})
 
-	e := setupInstanceRouter(mockClient)
+	e := setupInstanceRouter(t, mockClient)
 
 	body := `{"memory": "4.0G"}`
 	req := httptest.NewRequest(http.MethodPut, "/instances/test-vm/resources", strings.NewReader(body))

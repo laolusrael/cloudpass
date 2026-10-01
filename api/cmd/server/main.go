@@ -110,15 +110,20 @@ func main() {
 		log.Fatal().Err(err).Msg("failed to initialize job storage")
 	}
 
+	netUsage, err := handlers.NewNetworkUsageStore(filepath.Join(filepath.Dir(configPath), "data"))
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to initialize network usage store")
+	}
+
 	eventHub := handlers.NewEventHub()
 
-	instanceHandler := handlers.NewInstanceHandler(mpClient, cfgManager)
+	instanceHandler := handlers.NewInstanceHandler(mpClient, cfgManager, netUsage)
 	imageHandler := handlers.NewImageHandler(mpClient)
-	networkHandler := handlers.NewNetworkHandler(mpClient)
+	networkHandler := handlers.NewNetworkHandler(mpClient, netUsage)
 	healthHandler := handlers.NewHealthHandler()
 	configHandler := handlers.NewConfigHandler(cfgManager)
 	terminalHandler := websocket.NewTerminalHandler(mpClient, cfgManager.GetSSHKeyPath())
-	jobHandler := handlers.NewJobHandler(mpClient, cfgManager.GetMultipassTimeout(), jobStorage, eventHub, cfgManager)
+	jobHandler := handlers.NewJobHandler(mpClient, cfgManager.GetMultipassTimeout(), jobStorage, eventHub, cfgManager, netUsage)
 	hostHandler := handlers.NewHostHandler(mpClient, cfgManager)
 
 	jobStorage.Cleanup(24 * time.Hour)
@@ -194,10 +199,14 @@ func main() {
 	api.PUT("/instances/:name/resources", instanceHandler.UpdateResources)
 	api.GET("/instances/:name/terminal", terminalHandler.HandleTerminal)
 
+	api.GET("/instances/:name/network", instanceHandler.GetInstanceNetwork)
+	api.POST("/instances/:name/network", instanceHandler.SetInstanceNetwork)
 	api.GET("/images", imageHandler.List)
 	api.GET("/networks", networkHandler.List)
 	api.POST("/networks", networkHandler.Create)
 	api.DELETE("/networks/:name", networkHandler.Delete)
+	api.POST("/networks/:name/claim", networkHandler.ClaimNetwork)
+	api.DELETE("/networks/:name/claim", networkHandler.UnclaimNetwork)
 	api.GET("/jobs", jobHandler.List)
 	api.GET("/jobs/:id", jobHandler.Get)
 	api.GET("/jobs/stream", jobHandler.Stream)

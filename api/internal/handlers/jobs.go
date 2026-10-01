@@ -56,6 +56,7 @@ type JobHandler struct {
 	eventHub   *EventHub
 	mpClient   multipass.Client
 	cfgManager *config.ConfigManager
+	netUsage   *NetworkUsageStore
 	timeout    time.Duration
 	// idempotencyMu serializes same-key creates so concurrent replays
 	// collapse onto a single job instead of racing check-then-create.
@@ -70,12 +71,13 @@ func generateJobID() string {
 	return hex.EncodeToString(bytes)
 }
 
-func NewJobHandler(mpClient multipass.Client, timeoutSec int, storage *JobStorage, eventHub *EventHub, cfgManager *config.ConfigManager) *JobHandler {
+func NewJobHandler(mpClient multipass.Client, timeoutSec int, storage *JobStorage, eventHub *EventHub, cfgManager *config.ConfigManager, netUsage *NetworkUsageStore) *JobHandler {
 	return &JobHandler{
 		storage:    storage,
 		eventHub:   eventHub,
 		mpClient:   mpClient,
 		cfgManager: cfgManager,
+		netUsage:   netUsage,
 		timeout:    time.Duration(timeoutSec) * time.Second,
 	}
 }
@@ -1093,6 +1095,9 @@ func (h *JobHandler) runInstanceCreation(jobID string, req models.CreateInstance
 	job.InstanceName = instance.Name
 	job.UpdatedAt = time.Now()
 	h.storage.Set(job)
+	if h.netUsage != nil {
+		h.netUsage.RecordInstanceNetwork(instance.Name, req.Network)
+	}
 	if h.eventHub != nil {
 		h.eventHub.BroadcastJobUpdate(job)
 	}
