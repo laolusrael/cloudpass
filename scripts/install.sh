@@ -113,12 +113,65 @@ systemctl daemon-reload
 systemctl enable cloudpass
 systemctl start cloudpass
 
+# Post-install verification (duplicated from update.sh so the release
+# archives need no extra shared files): a broken first install must
+# fail loudly here, not later as a blank UI in the browser.
+PORT=$(grep -A5 '^[[:space:]]*server:' "$INSTALL_DIR/config.yaml" 2>/dev/null | grep -m1 '^[[:space:]]*port:' | awk '{print $2}' | tr -d '\r')
+if ! [[ "$PORT" =~ ^[0-9]+$ ]]; then
+    PORT=8080
+fi
+
+VERIFY_FAILED=""
+if command -v curl >/dev/null 2>&1; then
+    info "Verifying installation on http://localhost:$PORT ..."
+    HEALTHY=false
+    for _ in $(seq 1 30); do
+        if curl -sf --max-time 5 "http://localhost:$PORT/api/health" >/dev/null 2>&1; then
+            HEALTHY=true
+            break
+        fi
+        sleep 2
+    done
+    if [ "$HEALTHY" = true ]; then
+        echo -e "${GREEN}[ok]${NC} Service is healthy (/api/health)"
+        CHUNK=$(curl -sf --max-time 10 "http://localhost:$PORT/" 2>/dev/null | grep -o '/_app/immutable/[^"]*\.js' | head -n 1)
+        if [ -n "$CHUNK" ]; then
+            CTYPE=$(curl -sI --max-time 10 "http://localhost:$PORT$CHUNK" 2>/dev/null | grep -i '^content-type:' | tr -d '\r')
+            if echo "$CTYPE" | grep -qi 'text/html'; then
+                VERIFY_FAILED="UI asset $CHUNK served as text/html (broken UI build embedded in the binary)"
+            else
+                echo -e "${GREEN}[ok]${NC} UI assets served correctly"
+            fi
+        else
+            echo -e "${YELLOW}Could not find a bundled asset reference in index.html; skipping asset check${NC}"
+        fi
+    else
+        VERIFY_FAILED="service did not become healthy (/api/health did not return 200 within 60s)"
+    fi
+else
+    echo -e "${YELLOW}curl is not installed; skipping HTTP verification (service-presence check only)${NC}"
+fi
+
+if [ -z "$VERIFY_FAILED" ] && ! systemctl is-active --quiet cloudpass; then
+    VERIFY_FAILED="service is not active after start"
+fi
+
+if [ -n "$VERIFY_FAILED" ]; then
+    echo -e "${RED}[FAIL]${NC} Installation verification failed: $VERIFY_FAILED"
+    echo ""
+    echo "CloudPass may NOT be running correctly."
+    echo "Check logs with: sudo journalctl -u cloudpass -n 50"
+    exit 1
+fi
+
 info ""
 info "=========================================="
 info "  CloudPass installed successfully!"
 info "=========================================="
 info ""
-info "Access the UI at: http://localhost:8080"
+info "Verified: service healthy, UI assets served correctly"
+info ""
+info "Access the UI at: http://localhost:$PORT"
 info ""
 info "Commands:"
 info "  sudo systemctl start cloudpass   # Start service"
