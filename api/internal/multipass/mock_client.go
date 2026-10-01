@@ -25,6 +25,7 @@ type MockClient struct {
 	lastUploadTarget string
 	mountErr         error
 	unmountErr       error
+	allInfoErr       error
 	lastMountSource  string
 	lastMountTarget  string
 	lastMountOpts    MountOptions
@@ -237,6 +238,17 @@ func (m *MockClient) SetDeleteNetworkErr(err error) {
 
 func (m *MockClient) SetListNetworksErr(err error) {
 	m.listNetworksErr = err
+}
+
+func (m *MockClient) GetAllInstancesInfo() ([]models.Instance, error) {
+	if m.allInfoErr != nil {
+		return nil, m.allInfoErr
+	}
+	return m.instances, nil
+}
+
+func (m *MockClient) SetAllInstancesInfoErr(err error) {
+	m.allInfoErr = err
 }
 
 func (m *MockClient) MountInstance(instanceName string, sourcePath string, targetPath string, opts MountOptions) error {

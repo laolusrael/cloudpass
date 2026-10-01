@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ type Client interface {
 	Authenticate(passphrase string) error
 	ListInstances() ([]models.Instance, error)
 	GetInstance(name string) (*models.Instance, error)
+	GetAllInstancesInfo() ([]models.Instance, error)
 	GetInstanceResources(name string) (*models.InstanceResources, error)
 	GetInstanceIP(name string) (string, error)
 	CreateInstance(opts models.CreateInstanceRequest) (*models.Instance, error)
@@ -150,6 +152,46 @@ func (c *multipassClient) GetInstance(name string) (*models.Instance, error) {
 		return nil, fmt.Errorf("instance %q not found", name)
 	}
 
+	return c.parseInstanceInfo(name, instanceData)
+}
+
+// GetAllInstancesInfo returns full details for every instance in a single
+// daemon call. It exists for network-usage analysis, which needs the
+// per-instance IPs that ListInstances does not provide.
+func (c *multipassClient) GetAllInstancesInfo() ([]models.Instance, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), c.timeout)
+	defer cancel()
+
+	logger.Multipass.Load().Debug().Msg("executing: multipass info (all instances)")
+	cmd := exec.CommandContext(ctx, "multipass", "info", "--format", "json")
+	output, err := cmd.Output()
+	if err != nil {
+		logger.Multipass.Load().Error().Err(err).Msg("failed to get all instances info")
+		return nil, fmt.Errorf("failed to get all instances info: %w", err)
+	}
+
+	var raw struct {
+		Info map[string]json.RawMessage `json:"info"`
+	}
+	if err := json.Unmarshal(output, &raw); err != nil {
+		return nil, fmt.Errorf("failed to parse info output: %w", err)
+	}
+
+	instances := make([]models.Instance, 0, len(raw.Info))
+	for name, data := range raw.Info {
+		instance, err := c.parseInstanceInfo(name, data)
+		if err != nil {
+			logger.Multipass.Load().Warn().Err(err).Str("name", name).Msg("failed to parse instance data, skipping")
+			continue
+		}
+		instances = append(instances, *instance)
+	}
+	sort.Slice(instances, func(a, b int) bool { return instances[a].Name < instances[b].Name })
+
+	return instances, nil
+}
+
+func (c *multipassClient) parseInstanceInfo(name string, instanceData json.RawMessage) (*models.Instance, error) {
 	var i struct {
 		Name     string   `json:"name"`
 		State    string   `json:"state"`

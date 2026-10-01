@@ -24,7 +24,7 @@ func testJobHandler(t *testing.T) (*JobHandler, *JobStorage, *multipass.MockClie
 	storage, err := NewJobStorage(t.TempDir())
 	require.NoError(t, err)
 	mock := multipass.NewMockClient()
-	handler := NewJobHandler(mock, 60, storage, NewEventHub(), testConfigManager(t, &config.Config{}))
+	handler := NewJobHandler(mock, 60, storage, NewEventHub(), testConfigManager(t, &config.Config{}), mustNetworkUsage(t))
 	return handler, storage, mock
 }
 
