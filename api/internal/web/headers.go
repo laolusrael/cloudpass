@@ -26,29 +26,31 @@ const CacheControlImmutable = "public, max-age=31536000, immutable"
 const CacheControlNoStore = "no-store"
 
 func contentTypeForPath(path string) string {
-	ext := filepath.Ext(path)
-	switch ext {
-	case ".js", "js":
+	// filepath.Ext returns the extension with its leading dot (or "").
+	switch filepath.Ext(path) {
+	case ".js":
 		return "application/javascript"
-	case ".css", "css":
+	case ".css":
 		return "text/css"
-	case ".png", "png":
+	case ".png":
 		return "image/png"
-	case ".jpg", "jpg":
+	case ".jpg":
 		return "image/jpeg"
-	case ".svg", "svg":
+	case ".svg":
 		return "image/svg+xml"
-	case ".html", "html":
+	case ".html":
 		return "text/html"
-	case ".json", "json", ".map", ".webmanifest":
+	case ".json", ".map":
 		return "application/json"
-	case ".txt", "txt":
+	case ".webmanifest":
+		return "application/manifest+json"
+	case ".txt":
 		return "text/plain"
-	case ".ico", "ico":
+	case ".ico":
 		return "image/x-icon"
-	case ".woff", "woff":
+	case ".woff":
 		return "font/woff"
-	case ".woff2", "woff2":
+	case ".woff2":
 		return "font/woff2"
 	}
 

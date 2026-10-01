@@ -19,7 +19,7 @@ func TestContentTypeForPath(t *testing.T) {
 		{"index.html", "text/html"},
 		{"_app/version.json", "application/json"},
 		{"_app/immutable/chunks/B9nDytE-.js.map", "application/json"},
-		{"manifest.webmanifest", "application/json"},
+		{"manifest.webmanifest", "application/manifest+json"},
 		{"robots.txt", "text/plain"},
 		{"favicon.ico", "image/x-icon"},
 		{"font.woff", "font/woff"},

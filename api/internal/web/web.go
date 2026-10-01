@@ -7,7 +7,6 @@ import (
 	"embed"
 	"fmt"
 	"io/fs"
-	"net/http"
 	"strings"
 
 	"github.com/labstack/echo/v4"
@@ -16,15 +15,6 @@ import (
 //go:embed build/index.html
 //go:embed build/_app
 var staticFiles embed.FS
-
-func StaticHandler() echo.HandlerFunc {
-	subFS, err := fs.Sub(staticFiles, "build")
-	if err != nil {
-		panic(err)
-	}
-
-	return echo.WrapHandler(http.FileServer(http.FS(subFS)))
-}
 
 func StaticHandlerWithFallback() echo.HandlerFunc {
 	subFS, err := fs.Sub(staticFiles, "build")
