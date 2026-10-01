@@ -8,7 +8,7 @@ import (
 	"fmt"
 	"io/fs"
 	"net/http"
-	"path/filepath"
+	"strings"
 
 	"github.com/labstack/echo/v4"
 )
@@ -46,44 +46,30 @@ func StaticHandlerWithFallback() echo.HandlerFunc {
 
 		data, err := fs.ReadFile(subFS, cleanPath)
 		if err != nil {
+			// Bundled assets are never valid app routes: a miss means the
+			// browser holds a stale manifest from a previous build. Fail
+			// with 404 instead of serving index.html, which browsers
+			// reject as a module with a MIME-type error and blank page.
+			if strings.HasPrefix(cleanPath, "_app/") {
+				return echo.NewHTTPError(404, "asset not found")
+			}
 			indexData, err := fs.ReadFile(subFS, "index.html")
 			if err != nil {
 				return echo.NewHTTPError(500, "index.html not found")
 			}
 			c.Response().Header().Set("Content-Type", "text/html")
+			c.Response().Header().Set("Cache-Control", CacheControlNoStore)
 			c.Response().Write(indexData)
 			return nil
 		}
 
-		contentType := getContentType(cleanPath)
-		c.Response().Header().Set("Content-Type", contentType)
+		c.Response().Header().Set("Content-Type", contentTypeForPath(cleanPath))
+		if cacheControl := cacheControlForPath(cleanPath); cacheControl != "" {
+			c.Response().Header().Set("Cache-Control", cacheControl)
+		}
 		c.Response().Write(data)
 		return nil
 	}
-}
-
-func getContentType(path string) string {
-	ext := filepath.Ext(path)
-	switch ext {
-	case ".js", "js":
-		return "application/javascript"
-	case ".css", "css":
-		return "text/css"
-	case ".png", "png":
-		return "image/png"
-	case ".jpg", "jpg":
-		return "image/jpeg"
-	case ".svg", "svg":
-		return "image/svg+xml"
-	case ".html", "html":
-		return "text/html"
-	case ".woff", "woff":
-		return "font/woff"
-	case ".woff2", "woff2":
-		return "font/woff2"
-	}
-
-	return "text/plain"
 }
 
 func init() {
